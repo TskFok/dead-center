@@ -1,3 +1,6 @@
+// @vitest-environment node
+
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   getConsistentVersion,
@@ -226,4 +229,29 @@ describe("发布编排", () => {
       releaseHarness([], { failOn: "git push origin refs/tags/v0.1.1" }),
     ).toThrow("pnpm release --current");
   });
+});
+
+describe("发布工作流契约", () => {
+  const workflow = readFileSync(
+    new URL("../.github/workflows/release.yml", import.meta.url),
+    "utf8",
+  );
+
+  it("只由版本标签触发并取消同标签旧任务", () => {
+    expect(workflow).toContain('- "v*"');
+    expect(workflow).not.toContain("workflow_dispatch:");
+    expect(workflow).toContain("group: release-${{ github.ref }}");
+    expect(workflow).toContain("cancel-in-progress: true");
+  });
+
+  it("使用 Tauri Action v1 和当前标签发布", () => {
+    expect(workflow).toContain("uses: tauri-apps/tauri-action@v1");
+    expect(workflow).toContain("tagName: ${{ github.ref_name }}");
+  });
+
+  it.each([
+    "--bundles nsis",
+    "--target universal-apple-darwin --bundles dmg",
+    "--bundles appimage,deb",
+  ])("保留平台构建参数 %s", (args) => expect(workflow).toContain(`args: ${args}`));
 });
