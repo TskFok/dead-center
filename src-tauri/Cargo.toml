@@ -1,6 +1,6 @@
 [package]
 name = "dead-center"
-version = "0.1.0"
+version = "0.1.1"
 description = "跨平台防晕 3D 屏幕准星"
 authors = ["Dead Center Contributors"]
 edition = "2021"
