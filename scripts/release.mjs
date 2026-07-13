@@ -54,7 +54,12 @@ function repositoryPreflight(cwd, execute) {
   const branch = run("git", ["symbolic-ref", "--short", "HEAD"], true);
   if (!branch) throw new Error("当前处于 detached HEAD，不能发布");
   run("git", ["remote", "get-url", "origin"], true);
-  run("git", ["fetch", "origin", branch, "--tags"]);
+  run("git", [
+    "fetch",
+    "--no-tags",
+    "origin",
+    `refs/heads/${branch}:refs/remotes/origin/${branch}`,
+  ]);
   const sync = run(
     "git",
     ["rev-list", "--left-right", "--count", `HEAD...origin/${branch}`],

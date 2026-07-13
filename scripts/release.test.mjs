@@ -139,6 +139,21 @@ function releaseHarness(args, { failOn, state = {} } = {}) {
 }
 
 describe("发布编排", () => {
+  it("预检只更新当前远端分支且不抓取标签", () => {
+    const { calls } = releaseHarness(["--current"]);
+    const fetchCall = calls.find(
+      ([command, subcommand]) => command === "git" && subcommand === "fetch",
+    );
+    expect(fetchCall).toEqual([
+      "git",
+      "fetch",
+      "--no-tags",
+      "origin",
+      "refs/heads/main:refs/remotes/origin/main",
+    ]);
+    expect(fetchCall).not.toContain("--tags");
+  });
+
   it("校验、提交并推送新版本和标签", () => {
     const { calls, result } = releaseHarness([]);
     expect(result).toEqual({ mode: "next-patch", version: "0.1.1" });
