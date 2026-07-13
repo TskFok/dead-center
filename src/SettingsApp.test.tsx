@@ -64,9 +64,27 @@ describe("SettingsApp", () => {
       expect(screen.getByRole("button", { name })).toBeVisible();
     }
     expect(screen.getByLabelText("中心标记颜色")).toBeVisible();
-    expect(screen.getByLabelText("整体尺寸")).toHaveAttribute("min", "12");
-    expect(screen.getByLabelText("整体尺寸")).toHaveAttribute("max", "192");
+    expect(screen.getByLabelText("整体尺寸")).toHaveAttribute("min", "0");
+    expect(screen.getByLabelText("整体尺寸")).toHaveAttribute("max", "100");
+    expect(screen.getByText("3%")).toBeVisible();
     expect(screen.getByText("准星已显示")).toBeVisible();
+  });
+
+  it("按百分比调整整体尺寸并防抖保存", async () => {
+    vi.useFakeTimers();
+    const bridge = makeBridge();
+    render(<SettingsApp bridge={bridge} />);
+    await act(async () => undefined);
+
+    fireEvent.change(screen.getByLabelText("整体尺寸"), {
+      target: { value: "25" },
+    });
+
+    expect(bridge.updateVisual).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTime(100));
+    expect(bridge.updateVisual).toHaveBeenCalledWith(
+      expect.objectContaining({ sizePercent: 25 }),
+    );
   });
 
   it("切换到圆环预设后禁用缺口并防抖保存", async () => {

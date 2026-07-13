@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  CROSSHAIR_SIZE_MAX,
-  CROSSHAIR_SIZE_MIN,
+  CROSSHAIR_SIZE_PERCENT_MAX,
+  CROSSHAIR_SIZE_PERCENT_MIN,
   DEFAULT_SETTINGS,
   isDiamondPreset,
   isHexColor,
@@ -10,16 +10,18 @@ import {
 } from "./settings";
 
 describe("DEFAULT_SETTINGS", () => {
-  it("使用缺口十字和已确认的默认视觉参数", () => {
-    expect(DEFAULT_SETTINGS.visual).toEqual({
+  it("默认使用版本 2 和 3% 尺寸", () => {
+    expect(DEFAULT_SETTINGS.version).toBe(2);
+    expect(DEFAULT_SETTINGS.visual).toMatchObject({
       preset: "classic-cross",
       primaryColor: "#4DFFB8",
       accentColor: "#F4FF4D",
       opacity: 0.8,
-      sizePx: 32,
+      sizePercent: 3,
       strokePx: 3,
       gapPx: 8,
     });
+    expect(DEFAULT_SETTINGS.visual).not.toHaveProperty("sizePx");
     expect(DEFAULT_SETTINGS.toggleShortcut).toBe("Alt+Shift+X");
     expect(DEFAULT_SETTINGS.showOnLaunch).toBe(true);
     expect(DEFAULT_SETTINGS.launchAtLogin).toBe(false);
@@ -45,23 +47,32 @@ describe("isDiamondPreset", () => {
 });
 
 describe("normalizeVisualSettings", () => {
-  it("把超出范围的数值限制到产品边界", () => {
-    expect(CROSSHAIR_SIZE_MIN).toBe(12);
-    expect(CROSSHAIR_SIZE_MAX).toBe(192);
+  it("把百分比尺寸限制到 0 至 100", () => {
+    expect(CROSSHAIR_SIZE_PERCENT_MIN).toBe(0);
+    expect(CROSSHAIR_SIZE_PERCENT_MAX).toBe(100);
+    expect(
+      normalizeVisualSettings({
+        ...DEFAULT_SETTINGS.visual,
+        sizePercent: 120,
+      }).sizePercent,
+    ).toBe(100);
+    expect(
+      normalizeVisualSettings({
+        ...DEFAULT_SETTINGS.visual,
+        sizePercent: -1,
+      }).sizePercent,
+    ).toBe(0);
+  });
+
+  it("把透明度、线宽和缺口限制到产品边界", () => {
     expect(
       normalizeVisualSettings({
         ...DEFAULT_SETTINGS.visual,
         opacity: 0,
-        sizePx: 240,
         strokePx: 0,
         gapPx: 30,
       }),
-    ).toMatchObject({
-      opacity: 0.1,
-      sizePx: 192,
-      strokePx: 1,
-      gapPx: 24,
-    });
+    ).toMatchObject({ opacity: 0.1, strokePx: 1, gapPx: 24 });
   });
 
   it("拒绝无效颜色并恢复默认颜色", () => {

@@ -18,6 +18,7 @@ const PRESET_LABELS = {
 } satisfies Record<CrosshairPreset, string>;
 
 type CrosshairStyle = CSSProperties & {
+  "--crosshair-size": string;
   "--crosshair-primary": string;
   "--crosshair-accent": string;
   "--crosshair-stroke": string;
@@ -30,9 +31,8 @@ interface CrosshairProps {
 
 export function Crosshair({ settings }: CrosshairProps) {
   const style: CrosshairStyle = {
-    width: `${settings.sizePx}px`,
-    height: `${settings.sizePx}px`,
     opacity: settings.opacity,
+    "--crosshair-size": `${settings.sizePercent}cqmin`,
     "--crosshair-primary": settings.primaryColor,
     "--crosshair-accent": settings.accentColor,
     "--crosshair-stroke": `${settings.strokePx}px`,

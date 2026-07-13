@@ -256,11 +256,8 @@ describe("Crosshair", () => {
     render(<Crosshair settings={DEFAULT_SETTINGS.visual} />);
     const crosshair = screen.getByLabelText("缺口十字");
 
-    expect(crosshair).toHaveStyle({
-      opacity: "0.8",
-      width: "32px",
-      height: "32px",
-    });
+    expect(crosshair).toHaveStyle({ opacity: "0.8" });
+    expect(crosshair.style.getPropertyValue("--crosshair-size")).toBe("3cqmin");
     expect(crosshair.style.getPropertyValue("--crosshair-primary")).toBe(
       "#4DFFB8",
     );

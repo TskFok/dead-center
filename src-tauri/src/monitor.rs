@@ -130,6 +130,21 @@ pub fn resolve_monitor<'a>(
     }
 }
 
+pub fn logical_short_edge(monitor: &MonitorGeometry) -> Option<f64> {
+    (monitor.scale_factor.is_finite() && monitor.scale_factor > 0.0)
+        .then(|| f64::from(monitor.width.min(monitor.height)) / monitor.scale_factor)
+}
+
+pub fn resolved_logical_short_edge(
+    monitors: &[MonitorGeometry],
+    target_monitor_id: Option<&str>,
+) -> Option<f64> {
+    if monitors.is_empty() {
+        return None;
+    }
+    logical_short_edge(resolve_monitor(monitors, target_monitor_id).monitor)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,5 +196,28 @@ mod tests {
 
         assert_eq!(resolved.monitor.id, "right");
         assert!(!resolved.using_fallback);
+    }
+
+    #[test]
+    fn logical_short_edge_accounts_for_scale_factor() {
+        let monitor = monitor("retina", 0, 2560, 2.0, true);
+        assert_eq!(logical_short_edge(&monitor), Some(720.0));
+    }
+
+    #[test]
+    fn resolved_short_edge_uses_target_fallback_and_empty_default() {
+        let monitors = vec![
+            monitor("primary", 0, 1920, 1.0, true),
+            monitor("secondary", 1920, 2560, 2.0, false),
+        ];
+        assert_eq!(
+            resolved_logical_short_edge(&monitors, Some("secondary")),
+            Some(720.0)
+        );
+        assert_eq!(
+            resolved_logical_short_edge(&monitors, Some("missing")),
+            Some(1440.0)
+        );
+        assert_eq!(resolved_logical_short_edge(&[], None), None);
     }
 }

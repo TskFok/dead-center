@@ -1,5 +1,7 @@
 .crosshair {
   position: relative;
+  width: var(--crosshair-size);
+  height: var(--crosshair-size);
   flex: none;
   pointer-events: none;
   filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.95));

@@ -37,6 +37,7 @@ button {
 .overlay-root {
   width: 100vw;
   height: 100vh;
+  container-type: size;
   display: grid;
   place-items: center;
   overflow: hidden;

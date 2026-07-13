@@ -11,8 +11,8 @@ use serde_json::Value;
 use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_store::StoreExt;
 
-use crate::config::AppSettings;
-use crate::monitor::MonitorInfo;
+use crate::config::{migrate_v1_settings, AppSettings, LegacyAppSettingsV1, SETTINGS_VERSION};
+use crate::monitor::{collect_monitors, resolved_logical_short_edge, MonitorInfo};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -80,8 +80,14 @@ pub fn load_settings<R: Runtime>(app: &AppHandle<R>) -> Result<AppSettings, Stri
         .map_err(|error| error.to_string())?;
 
     if let Some(value) = store.get("settings") {
-        if let Ok(mut settings) = serde_json::from_value::<AppSettings>(value) {
-            settings.visual.normalize();
+        if let Some((settings, migrated)) = decode_settings(app, value) {
+            if migrated {
+                store.set(
+                    "settings",
+                    serde_json::to_value(&settings).map_err(|error| error.to_string())?,
+                );
+                store.save().map_err(|error| error.to_string())?;
+            }
             return Ok(settings);
         }
     }
@@ -133,14 +139,49 @@ fn is_valid_settings_store(bytes: &[u8]) -> bool {
         .map(|values| {
             values
                 .get("settings")
-                .map(|value| {
-                    serde_json::from_value::<AppSettings>(value.clone())
-                        .map(|settings| settings.version == 1)
-                        .unwrap_or(false)
-                })
+                .cloned()
+                .map(is_supported_settings_value)
                 .unwrap_or(true)
         })
         .unwrap_or(false)
+}
+
+fn settings_version(value: &Value) -> Option<u64> {
+    value.get("version").and_then(Value::as_u64)
+}
+
+fn legacy_short_edge<R: Runtime>(
+    app: &AppHandle<R>,
+    target_monitor_id: Option<&str>,
+) -> Option<f64> {
+    let monitors = collect_monitors(app).ok()?;
+    resolved_logical_short_edge(&monitors, target_monitor_id)
+}
+
+fn decode_settings<R: Runtime>(app: &AppHandle<R>, value: Value) -> Option<(AppSettings, bool)> {
+    match settings_version(&value)? {
+        1 => {
+            let legacy = serde_json::from_value::<LegacyAppSettingsV1>(value).ok()?;
+            let short_edge = legacy_short_edge(app, legacy.target_monitor_id.as_deref());
+            Some((migrate_v1_settings(legacy, short_edge), true))
+        }
+        version if version == u64::from(SETTINGS_VERSION) => {
+            let mut settings = serde_json::from_value::<AppSettings>(value).ok()?;
+            settings.visual.normalize();
+            Some((settings, false))
+        }
+        _ => None,
+    }
+}
+
+fn is_supported_settings_value(value: Value) -> bool {
+    match settings_version(&value) {
+        Some(1) => serde_json::from_value::<LegacyAppSettingsV1>(value).is_ok(),
+        Some(version) if version == u64::from(SETTINGS_VERSION) => {
+            serde_json::from_value::<AppSettings>(value).is_ok()
+        }
+        _ => false,
+    }
 }
 
 fn settings_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
@@ -172,14 +213,37 @@ fn current_session_type() -> SessionType {
 mod tests {
     use super::*;
 
-    #[test]
-    fn valid_store_contains_version_one_settings() {
-        let bytes = serde_json::to_vec(&serde_json::json!({
-            "settings": AppSettings::default()
-        }))
-        .unwrap();
+    fn version_one_value() -> Value {
+        serde_json::json!({
+            "version": 1,
+            "visual": {
+                "preset": "classic-cross",
+                "primaryColor": "#4DFFB8",
+                "accentColor": "#F4FF4D",
+                "opacity": 0.8,
+                "sizePx": 32.0,
+                "strokePx": 3.0,
+                "gapPx": 8.0
+            },
+            "targetMonitorId": null,
+            "toggleShortcut": "Alt+Shift+X",
+            "launchAtLogin": false,
+            "showOnLaunch": true
+        })
+    }
 
-        assert!(is_valid_settings_store(&bytes));
+    #[test]
+    fn valid_store_accepts_versions_one_and_two() {
+        for settings in [
+            version_one_value(),
+            serde_json::to_value(AppSettings::default()).unwrap(),
+        ] {
+            let bytes = serde_json::to_vec(&serde_json::json!({
+                "settings": settings
+            }))
+            .unwrap();
+            assert!(is_valid_settings_store(&bytes));
+        }
     }
 
     #[test]
@@ -189,10 +253,8 @@ mod tests {
 
     #[test]
     fn unsupported_settings_version_is_not_valid() {
-        let settings = AppSettings {
-            version: 2,
-            ..AppSettings::default()
-        };
+        let mut settings = serde_json::to_value(AppSettings::default()).unwrap();
+        settings["version"] = 3.into();
         let bytes = serde_json::to_vec(&serde_json::json!({ "settings": settings })).unwrap();
 
         assert!(!is_valid_settings_store(&bytes));

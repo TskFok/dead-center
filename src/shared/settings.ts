@@ -27,13 +27,13 @@ export interface VisualSettings {
   primaryColor: string;
   accentColor: string;
   opacity: number;
-  sizePx: number;
+  sizePercent: number;
   strokePx: number;
   gapPx: number;
 }
 
 export interface AppSettings {
-  version: 1;
+  version: 2;
   visual: VisualSettings;
   targetMonitorId: string | null;
   toggleShortcut: string;
@@ -67,17 +67,17 @@ export interface AppSnapshot {
   monitors: MonitorInfo[];
 }
 
-export const CROSSHAIR_SIZE_MIN = 12;
-export const CROSSHAIR_SIZE_MAX = 192;
+export const CROSSHAIR_SIZE_PERCENT_MIN = 0;
+export const CROSSHAIR_SIZE_PERCENT_MAX = 100;
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  version: 1,
+  version: 2,
   visual: {
     preset: "classic-cross",
     primaryColor: "#4DFFB8",
     accentColor: "#F4FF4D",
     opacity: 0.8,
-    sizePx: 32,
+    sizePercent: 3,
     strokePx: 3,
     gapPx: 8,
   },
@@ -106,7 +106,11 @@ export function normalizeVisualSettings(
       ? value.accentColor.toUpperCase()
       : DEFAULT_SETTINGS.visual.accentColor,
     opacity: clamp(value.opacity, 0.1, 1),
-    sizePx: clamp(value.sizePx, CROSSHAIR_SIZE_MIN, CROSSHAIR_SIZE_MAX),
+    sizePercent: clamp(
+      value.sizePercent,
+      CROSSHAIR_SIZE_PERCENT_MIN,
+      CROSSHAIR_SIZE_PERCENT_MAX,
+    ),
     strokePx: clamp(value.strokePx, 1, 8),
     gapPx: clamp(value.gapPx, 0, 24),
   };

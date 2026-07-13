@@ -227,6 +227,7 @@
   height: 322px;
   margin-top: 18px;
   position: relative;
+  container-type: size;
   display: grid;
   place-items: center;
   overflow: hidden;
