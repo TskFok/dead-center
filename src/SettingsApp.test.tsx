@@ -48,6 +48,16 @@ const PRESET_NAMES = [
   "长旗实心菱形",
 ] as const;
 
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+};
+
 describe("SettingsApp", () => {
   beforeEach(() => {
     vi.useRealTimers();
@@ -162,6 +172,122 @@ describe("SettingsApp", () => {
     expect(viewport).toHaveStyle({ aspectRatio: "1920 / 1200" });
     expect(screen.getByLabelText("整体尺寸")).toHaveValue("25");
     expect(screen.getByRole("textbox")).toHaveValue("Alt+Shift+D");
+    expect(bridge.updateVisual).not.toHaveBeenCalled();
+  });
+
+  it("乱序快照只允许最新请求更新屏幕预览", async () => {
+    const staleRequest = deferred<AppSnapshot>();
+    const latestRequest = deferred<AppSnapshot>();
+    const latestSnapshot: AppSnapshot = {
+      ...snapshot,
+      status: {
+        ...snapshot.status,
+        resolvedMonitorId: "latest",
+        usingFallbackMonitor: true,
+      },
+      monitors: [
+        {
+          id: "latest",
+          name: "最新回退屏幕",
+          isPrimary: true,
+          width: 1920,
+          height: 1200,
+          scaleFactor: 1,
+        },
+      ],
+    };
+    let runtimeHandler: Parameters<AppBridge["onRuntimeChanged"]>[0] | undefined;
+    const bridge = makeBridge();
+    vi.mocked(bridge.getSnapshot)
+      .mockResolvedValueOnce(snapshot)
+      .mockImplementationOnce(() => staleRequest.promise)
+      .mockImplementationOnce(() => latestRequest.promise);
+    vi.mocked(bridge.onRuntimeChanged).mockImplementation(async (handler) => {
+      runtimeHandler = handler;
+      return () => undefined;
+    });
+    render(<SettingsApp bridge={bridge} />);
+    expect(await screen.findByLabelText("目标屏幕预览画布")).toHaveAttribute(
+      "data-monitor-id",
+      "primary",
+    );
+
+    act(() => {
+      runtimeHandler?.(snapshot.status);
+      runtimeHandler?.(latestSnapshot.status);
+    });
+    await act(async () => latestRequest.resolve(latestSnapshot));
+    expect(screen.getByLabelText("目标屏幕预览画布")).toHaveAttribute(
+      "data-monitor-id",
+      "latest",
+    );
+
+    await act(async () => staleRequest.resolve(snapshot));
+
+    const viewport = screen.getByLabelText("目标屏幕预览画布");
+    expect(viewport).toHaveAttribute("data-monitor-id", "latest");
+    expect(viewport).toHaveStyle({ aspectRatio: "1920 / 1200" });
+  });
+
+  it("最新快照成功后忽略旧请求的延迟失败", async () => {
+    const staleRequest = deferred<AppSnapshot>();
+    const latestRequest = deferred<AppSnapshot>();
+    let runtimeHandler: Parameters<AppBridge["onRuntimeChanged"]>[0] | undefined;
+    const bridge = makeBridge();
+    vi.mocked(bridge.getSnapshot)
+      .mockResolvedValueOnce(snapshot)
+      .mockImplementationOnce(() => staleRequest.promise)
+      .mockImplementationOnce(() => latestRequest.promise);
+    vi.mocked(bridge.onRuntimeChanged).mockImplementation(async (handler) => {
+      runtimeHandler = handler;
+      return () => undefined;
+    });
+    render(<SettingsApp bridge={bridge} />);
+    expect(await screen.findByText("准星已显示")).toBeVisible();
+
+    act(() => {
+      runtimeHandler?.(snapshot.status);
+      runtimeHandler?.(snapshot.status);
+    });
+    await act(async () => latestRequest.resolve(snapshot));
+
+    await act(async () => staleRequest.reject(new Error("过期运行时失败")));
+
+    expect(screen.queryByText("过期运行时失败")).not.toBeInTheDocument();
+    expect(screen.queryByText("准星服务需要处理")).not.toBeInTheDocument();
+  });
+
+  it("初始快照失败后由运行时成功快照初始化界面且不触发保存", async () => {
+    vi.useFakeTimers();
+    const recoveredSnapshot: AppSnapshot = {
+      ...snapshot,
+      settings: {
+        ...snapshot.settings,
+        visual: {
+          ...snapshot.settings.visual,
+          sizePercent: 41,
+        },
+        toggleShortcut: "Alt+Shift+R",
+      },
+    };
+    let runtimeHandler: Parameters<AppBridge["onRuntimeChanged"]>[0] | undefined;
+    const bridge = makeBridge();
+    vi.mocked(bridge.getSnapshot)
+      .mockRejectedValueOnce(new Error("初始快照失败"))
+      .mockResolvedValueOnce(recoveredSnapshot);
+    vi.mocked(bridge.onRuntimeChanged).mockImplementation(async (handler) => {
+      runtimeHandler = handler;
+      return () => undefined;
+    });
+    render(<SettingsApp bridge={bridge} />);
+    await act(async () => undefined);
+    expect(screen.getByText("初始快照失败")).toBeVisible();
+
+    await act(async () => runtimeHandler?.(recoveredSnapshot.status));
+
+    expect(screen.getByLabelText("整体尺寸")).toHaveValue("41");
+    expect(screen.getByRole("textbox")).toHaveValue("Alt+Shift+R");
+    await act(async () => vi.advanceTimersByTime(100));
     expect(bridge.updateVisual).not.toHaveBeenCalled();
   });
 

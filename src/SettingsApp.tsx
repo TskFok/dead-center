@@ -46,38 +46,38 @@ export function SettingsApp({ bridge }: SettingsAppProps) {
   const [shortcutDraft, setShortcutDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const draftsInitialized = useRef(false);
   const visualReady = useRef(false);
 
   useEffect(() => {
     let active = true;
+    let latestSnapshotRequest = 0;
     let unlisten: (() => void) | undefined;
 
-    bridge
-      .getSnapshot()
-      .then((next) => {
-        if (!active) return;
-        setSnapshot(next);
-        setVisual(next.settings.visual);
-        setShortcutDraft(next.settings.toggleShortcut);
-      })
-      .catch((reason) => {
-        if (active) setError(errorMessage(reason));
-      });
-
-    const refreshRuntimeSnapshot = async () => {
+    const requestSnapshot = async () => {
+      const request = ++latestSnapshotRequest;
       try {
         const next = await bridge.getSnapshot();
-        if (!active) return;
+        if (!active || request !== latestSnapshotRequest) return;
         setSnapshot(next);
         setError(null);
+        if (!draftsInitialized.current) {
+          draftsInitialized.current = true;
+          setVisual(next.settings.visual);
+          setShortcutDraft(next.settings.toggleShortcut);
+        }
       } catch (reason) {
-        if (active) setError(errorMessage(reason));
+        if (active && request === latestSnapshotRequest) {
+          setError(errorMessage(reason));
+        }
       }
     };
 
+    void requestSnapshot();
+
     bridge
       .onRuntimeChanged(() => {
-        void refreshRuntimeSnapshot();
+        void requestSnapshot();
       })
       .then((stop) => {
         if (active) unlisten = stop;
