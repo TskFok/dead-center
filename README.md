@@ -50,6 +50,23 @@ pnpm tauri build
 
 ## 自动发布
 
+发布命令要求工作区干净、当前分支已与 `origin` 完全同步，并且 Git 凭据具有分支和 Tag 推送权限。命令会先运行前端测试、前端构建和 Rust 测试。
+
+```bash
+# 自动递增补丁版本，例如 0.1.0 -> 0.1.1
+pnpm release
+
+# 发布指定的更高版本
+pnpm release 1.2.3
+
+# 不改版本，重新发布当前版本
+pnpm release --current
+```
+
+普通发布会同步更新前端、Tauri 和 Rust 版本，创建中文版本提交并推送当前分支，然后推送 `v<版本>` Tag。`--current` 会强制把当前版本 Tag 移到当前提交；受保护 Tag 或 Immutable Releases 禁止强推时，远端会拒绝该操作。
+
+如果分支推送后 Tag 推送失败，修复远端问题后执行 `pnpm release --current`。如果 GitHub Actions 构建失败，提交并推送修复后同样执行 `pnpm release --current`。工作流会复用已有 Release 并覆盖同名安装包。
+
 推送 `v*` 标签会触发 GitHub Actions，测试通过后生成：
 
 - Windows x64 NSIS 安装包
