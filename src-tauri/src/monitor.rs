@@ -133,6 +133,7 @@ pub fn resolve_monitor<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::overlay::OVERLAY_SIZE;
 
     fn monitor(id: &str, x: i32, width: u32, scale_factor: f64, primary: bool) -> MonitorGeometry {
         MonitorGeometry {
@@ -151,9 +152,9 @@ mod tests {
     fn centers_logical_overlay_on_negative_coordinate_hidpi_monitor() {
         let monitor = monitor("left", -2560, 2560, 2.0, false);
 
-        let point = centered_overlay_position(&monitor, 128.0);
+        let point = centered_overlay_position(&monitor, OVERLAY_SIZE);
 
-        assert_eq!(point, PhysicalPoint { x: -1408, y: 592 });
+        assert_eq!(point, PhysicalPoint { x: -1536, y: 464 });
     }
 
     #[test]

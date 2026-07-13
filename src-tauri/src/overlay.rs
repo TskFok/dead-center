@@ -10,7 +10,7 @@ use crate::{
 };
 
 pub const OVERLAY_LABEL: &str = "crosshair";
-const OVERLAY_SIZE: f64 = 128.0;
+pub(crate) const OVERLAY_SIZE: f64 = 256.0;
 
 pub fn create_or_refresh_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     if app.get_webview_window(OVERLAY_LABEL).is_none() {
