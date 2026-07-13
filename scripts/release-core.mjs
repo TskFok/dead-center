@@ -71,8 +71,14 @@ function packageBlock(content, marker) {
     return match[0];
   }
   const blocks = content.match(/\[\[package\]\][\s\S]*?(?=\n\[\[package\]\]|$)/g) ?? [];
-  const matches = blocks.filter((block) => /^name\s*=\s*"dead-center"\s*$/m.test(block));
-  if (matches.length !== 1) throw new Error("src-tauri/Cargo.lock 必须包含一个 dead-center 包");
+  const matches = blocks.filter(
+    (block) =>
+      /^name\s*=\s*"dead-center"\s*$/m.test(block) &&
+      !/^source\s*=\s*"[^"]+"\s*$/m.test(block),
+  );
+  if (matches.length !== 1) {
+    throw new Error("src-tauri/Cargo.lock 必须包含一个无 source 的 dead-center 根包");
+  }
   return matches[0];
 }
 
@@ -131,8 +137,8 @@ function replaceJsonVersion(content, version, path) {
   throw new Error(`${path} 缺少字符串 version`);
 }
 
-function replaceCargoVersion(content, version) {
-  const block = packageBlock(content, "cargoToml");
+function replaceCargoVersion(content, version, marker) {
+  const block = packageBlock(content, marker);
   const updatedBlock = block.replace(
     /^(version\s*=\s*")[^"]+("\s*)$/m,
     `$1${version}$2`,
@@ -149,7 +155,7 @@ export function updateVersionContents(contents, version) {
       version,
       VERSION_PATHS.tauriConfig,
     ),
-    cargoToml: replaceCargoVersion(contents.cargoToml, version),
-    cargoLock: contents.cargoLock,
+    cargoToml: replaceCargoVersion(contents.cargoToml, version, "cargoToml"),
+    cargoLock: replaceCargoVersion(contents.cargoLock, version, "cargoLock"),
   };
 }

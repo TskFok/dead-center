@@ -107,12 +107,29 @@ describe("版本清单", () => {
     );
   });
 
-  it("只更新三个清单的版本字段", () => {
+  it("更新四个版本源的版本字段", () => {
     const updated = updateVersionContents(manifests, "0.1.1");
     expect(updated.packageJson).toBe(manifests.packageJson.replace("0.1.0", "0.1.1"));
     expect(updated.tauriConfig).toBe(manifests.tauriConfig.replace("0.1.0", "0.1.1"));
     expect(updated.cargoToml).toBe(manifests.cargoToml.replace("0.1.0", "0.1.1"));
-    expect(updated.cargoLock).toBe(manifests.cargoLock);
+    expect(updated.cargoLock).toBe(manifests.cargoLock.replace("0.1.0", "0.1.1"));
+  });
+
+  it("Cargo.lock 存在同名远程依赖时只更新本地根包", () => {
+    const cargoLock = `[[package]]
+name = "dead-center"
+version = "9.9.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "dead-center"
+version = "0.1.0"
+dependencies = []
+`;
+
+    expect(updateVersionContents({ ...manifests, cargoLock }, "0.1.1").cargoLock).toBe(
+      cargoLock.replace('version = "0.1.0"', 'version = "0.1.1"'),
+    );
   });
 
   it("只更新顶层 JSON 版本字段", () => {
@@ -176,12 +193,6 @@ function releaseHarness(
     }
     if (key === "git tag --list v0.1.1") return localTag;
     if (key === "git ls-remote --tags origin refs/tags/v0.1.1") return remoteTag;
-    if (command === "cargo" && commandArgs[0] === "metadata") {
-      files.set(
-        "/repo/src-tauri/Cargo.lock",
-        files.get("/repo/src-tauri/Cargo.lock").replace("0.1.0", "0.1.1"),
-      );
-    }
     return "";
   };
   const result = runRelease({
