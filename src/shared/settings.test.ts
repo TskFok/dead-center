@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_SETTINGS,
+  isDiamondPreset,
   isHexColor,
   normalizeVisualSettings,
 } from "./settings";
@@ -21,6 +22,24 @@ describe("DEFAULT_SETTINGS", () => {
     expect(DEFAULT_SETTINGS.showOnLaunch).toBe(true);
     expect(DEFAULT_SETTINGS.launchAtLogin).toBe(false);
   });
+});
+
+describe("isDiamondPreset", () => {
+  it.each([
+    "fine-diamond",
+    "inward-diamond",
+    "long-diamond",
+    "solid-diamond",
+  ] as const)("识别菱形旗标准星 %s", (preset) => {
+    expect(isDiamondPreset(preset)).toBe(true);
+  });
+
+  it.each(["dot-ring", "classic-cross", "soft-target"] as const)(
+    "不把旧方案 %s 识别为菱形旗标",
+    (preset) => {
+      expect(isDiamondPreset(preset)).toBe(false);
+    },
+  );
 });
 
 describe("normalizeVisualSettings", () => {

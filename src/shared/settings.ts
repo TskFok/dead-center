@@ -1,7 +1,26 @@
 export type CrosshairPreset =
   | "dot-ring"
   | "classic-cross"
-  | "soft-target";
+  | "soft-target"
+  | "fine-diamond"
+  | "inward-diamond"
+  | "long-diamond"
+  | "solid-diamond";
+
+export const DIAMOND_PRESETS = [
+  "fine-diamond",
+  "inward-diamond",
+  "long-diamond",
+  "solid-diamond",
+] as const satisfies readonly CrosshairPreset[];
+
+export type DiamondCrosshairPreset = (typeof DIAMOND_PRESETS)[number];
+
+export function isDiamondPreset(
+  preset: CrosshairPreset,
+): preset is DiamondCrosshairPreset {
+  return DIAMOND_PRESETS.some((candidate) => candidate === preset);
+}
 
 export interface VisualSettings {
   preset: CrosshairPreset;

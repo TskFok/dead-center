@@ -6,6 +6,10 @@ pub enum CrosshairPreset {
     DotRing,
     ClassicCross,
     SoftTarget,
+    FineDiamond,
+    InwardDiamond,
+    LongDiamond,
+    SolidDiamond,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -96,6 +100,24 @@ mod tests {
         assert_eq!(settings.toggle_shortcut, "Alt+Shift+X");
         assert!(settings.show_on_launch);
         assert!(!settings.launch_at_login);
+    }
+
+    #[test]
+    fn diamond_presets_use_kebab_case() {
+        let cases = [
+            (CrosshairPreset::FineDiamond, "\"fine-diamond\""),
+            (CrosshairPreset::InwardDiamond, "\"inward-diamond\""),
+            (CrosshairPreset::LongDiamond, "\"long-diamond\""),
+            (CrosshairPreset::SolidDiamond, "\"solid-diamond\""),
+        ];
+
+        for (preset, serialized) in cases {
+            assert_eq!(serde_json::to_string(&preset).unwrap(), serialized);
+            assert_eq!(
+                serde_json::from_str::<CrosshairPreset>(serialized).unwrap(),
+                preset
+            );
+        }
     }
 
     #[test]
