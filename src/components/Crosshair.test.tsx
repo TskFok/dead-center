@@ -34,6 +34,45 @@ const DIAMOND_CASES = [
   ["solid-diamond", "crosshair__diamond--solid"],
 ] as const;
 
+const FINE_ARM_LENGTH_CASES = [
+  {
+    sizePercent: 0,
+    gapPx: 0,
+    strokePx: 1,
+    expected: "max(1px, calc(0% - 0px))",
+  },
+  {
+    sizePercent: 0,
+    gapPx: 8,
+    strokePx: 3,
+    expected: "max(3px, calc(0% - 0px))",
+  },
+  {
+    sizePercent: 0,
+    gapPx: 24,
+    strokePx: 8,
+    expected: "max(8px, calc(0% - 0px))",
+  },
+  {
+    sizePercent: 100,
+    gapPx: 0,
+    strokePx: 1,
+    expected: "max(1px, calc(50% - 10px))",
+  },
+  {
+    sizePercent: 100,
+    gapPx: 8,
+    strokePx: 3,
+    expected: "max(3px, calc(50% - 14px))",
+  },
+  {
+    sizePercent: 100,
+    gapPx: 24,
+    strokePx: 8,
+    expected: "max(8px, calc(50% - 22px))",
+  },
+] as const;
+
 interface FlagGeometry {
   insetPercent: number;
   clearanceCapPercent: number;
@@ -57,6 +96,22 @@ const readPresetBlock = (preset: DiamondCrosshairPreset) => {
     throw new Error(`未找到 ${preset} 的 CSS 规则`);
   }
   return block;
+};
+
+const expectCssDeclaration = (
+  selectorFragments: readonly string[],
+  declaration: string,
+) => {
+  const matchingRule = [...crosshairCss.matchAll(/([^{}]+)\{([^{}]+)\}/g)]
+    .find(
+      ([, selector, declarations]) =>
+        selectorFragments.every((fragment) => selector.includes(fragment)) &&
+        declarations.includes(declaration),
+    );
+  expect(
+    matchingRule,
+    `${selectorFragments.join(" + ")} 应包含 ${declaration}`,
+  ).toBeDefined();
 };
 
 const readFlagGeometry = (preset: DiamondCrosshairPreset): FlagGeometry => {
@@ -161,7 +216,7 @@ describe("Crosshair", () => {
     },
   );
 
-  it("fine-diamond 在 0% 时铺满画布并保留线宽旗头", () => {
+  it("fine-diamond 在 0% 时铺满画布", () => {
     renderPreset("fine-diamond", {
       sizePercent: 0,
       strokePx: 3,
@@ -169,47 +224,53 @@ describe("Crosshair", () => {
     });
     const crosshair = screen.getByLabelText("细旗空心菱形");
     expect(crosshair).toHaveClass("crosshair--zero");
-    expect(crosshair.style.getPropertyValue("--fine-arm-length")).toBe(
-      "max(3px, calc(0% - 0px))",
-    );
     expect(readPresetBlock("fine-diamond")).toContain("width: 100cqw");
     expect(readPresetBlock("fine-diamond")).toContain("height: 100cqh");
   });
 
-  it("fine-diamond 在 100% 时停在菱形和缺口外缘", () => {
-    renderPreset("fine-diamond", {
-      sizePercent: 100,
-      strokePx: 3,
-      gapPx: 8,
-    });
-    expect(
-      screen
-        .getByLabelText("细旗空心菱形")
-        .style.getPropertyValue("--fine-arm-length"),
-    ).toBe("max(3px, calc(50% - 14px))");
-  });
+  it.each(FINE_ARM_LENGTH_CASES)(
+    "fine-diamond 在 $sizePercent%、缺口 $gapPx px、线宽 $strokePx px 时臂长正确",
+    ({ sizePercent, gapPx, strokePx, expected }) => {
+      renderPreset("fine-diamond", { sizePercent, gapPx, strokePx });
+      expect(
+        screen
+          .getByLabelText("细旗空心菱形")
+          .style.getPropertyValue("--fine-arm-length"),
+      ).toBe(expected);
+    },
+  );
 
-  it("fine-diamond 在 100% 时响应中心缺口", () => {
-    const noGap = renderPreset("fine-diamond", {
-      sizePercent: 100,
-      gapPx: 0,
-    });
-    expect(
-      screen
-        .getByLabelText("细旗空心菱形")
-        .style.getPropertyValue("--fine-arm-length"),
-    ).toContain("calc(50% - 10px)");
-    noGap.unmount();
+  it("fine-diamond 的四臂锚定四边并按对应轴使用向心臂长", () => {
+    expect(readPresetBlock("fine-diamond")).toContain("--flag-inset: 0%");
 
-    renderPreset("fine-diamond", {
-      sizePercent: 100,
-      gapPx: 24,
-    });
-    expect(
-      screen
-        .getByLabelText("细旗空心菱形")
-        .style.getPropertyValue("--fine-arm-length"),
-    ).toContain("calc(50% - 22px)");
+    expectCssDeclaration(
+      [
+        ".crosshair--fine-diamond",
+        ".crosshair__flag--left",
+        ".crosshair__flag--right",
+      ],
+      "width: var(--fine-arm-length)",
+    );
+    expectCssDeclaration(
+      [
+        ".crosshair--fine-diamond",
+        ".crosshair__flag--top",
+        ".crosshair__flag--bottom",
+      ],
+      "height: var(--fine-arm-length)",
+    );
+
+    for (const [direction, edge] of [
+      ["left", "left"],
+      ["right", "right"],
+      ["top", "top"],
+      ["bottom", "bottom"],
+    ] as const) {
+      expectCssDeclaration(
+        [`.crosshair__flag--${direction}`],
+        `${edge}: var(--flag-inset)`,
+      );
+    }
   });
 
   it("普通预设在 0% 时隐藏但 fine-diamond 仍保留中心", () => {
@@ -225,7 +286,6 @@ describe("Crosshair", () => {
   });
 
   it("fine-diamond 的四向旗臂尖头朝向中心", () => {
-
     const inwardFineDiamondRules = [
       [
         "left",

@@ -102,12 +102,19 @@ export function SettingsApp({ bridge }: SettingsAppProps) {
   }
 
   const statusError = error ?? snapshot.status.error;
+  const validPreviewMonitors = snapshot.monitors.filter(
+    (monitor) =>
+      Number.isFinite(monitor.width) &&
+      Number.isFinite(monitor.height) &&
+      monitor.width > 0 &&
+      monitor.height > 0,
+  );
   const previewMonitor =
-    snapshot.monitors.find(
+    validPreviewMonitors.find(
       (monitor) => monitor.id === snapshot.status.resolvedMonitorId,
     ) ??
-    snapshot.monitors.find((monitor) => monitor.isPrimary) ??
-    snapshot.monitors[0];
+    validPreviewMonitors.find((monitor) => monitor.isPrimary) ??
+    validPreviewMonitors[0];
   const previewWidth = previewMonitor?.width ?? 16;
   const previewHeight = previewMonitor?.height ?? 9;
   const previewRatio = previewWidth / previewHeight;

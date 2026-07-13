@@ -102,6 +102,89 @@ describe("SettingsApp", () => {
     expect(viewport).toHaveStyle({ aspectRatio: "1920 / 1200" });
   });
 
+  it("解析屏幕尺寸无效时回退到有效主屏比例", async () => {
+    const invalidResolvedSnapshot: AppSnapshot = {
+      ...snapshot,
+      status: {
+        ...snapshot.status,
+        resolvedMonitorId: "invalid-resolved",
+      },
+      monitors: [
+        {
+          id: "invalid-resolved",
+          name: "零宽屏幕",
+          isPrimary: false,
+          width: 0,
+          height: 1080,
+          scaleFactor: 1,
+        },
+        ...snapshot.monitors,
+      ],
+    };
+    const bridge = makeBridge();
+    vi.mocked(bridge.getSnapshot).mockResolvedValue(invalidResolvedSnapshot);
+    render(<SettingsApp bridge={bridge} />);
+
+    const viewport = await screen.findByLabelText("目标屏幕预览画布");
+    expect(viewport).toHaveAttribute("data-monitor-id", "primary");
+    expect(viewport).toHaveStyle({ aspectRatio: "2560 / 1440" });
+  });
+
+  it("所有屏幕尺寸无效时回退安全的 16:9 预览", async () => {
+    const invalidSnapshot: AppSnapshot = {
+      ...snapshot,
+      status: {
+        ...snapshot.status,
+        resolvedMonitorId: "zero-height",
+      },
+      monitors: [
+        {
+          id: "zero-height",
+          name: "零高屏幕",
+          isPrimary: true,
+          width: 1920,
+          height: 0,
+          scaleFactor: 1,
+        },
+        {
+          id: "infinite-width",
+          name: "无限宽屏幕",
+          isPrimary: false,
+          width: Number.POSITIVE_INFINITY,
+          height: 1080,
+          scaleFactor: 1,
+        },
+      ],
+    };
+    const bridge = makeBridge();
+    vi.mocked(bridge.getSnapshot).mockResolvedValue(invalidSnapshot);
+    render(<SettingsApp bridge={bridge} />);
+
+    const viewport = await screen.findByLabelText("目标屏幕预览画布");
+    expect(viewport).toHaveAttribute("data-monitor-id", "unknown");
+    expect(viewport).toHaveStyle({ aspectRatio: "16 / 9" });
+    expect(viewport.getAttribute("style")).not.toMatch(/NaN|Infinity/);
+  });
+
+  it("没有屏幕时回退安全的 16:9 预览", async () => {
+    const noMonitorSnapshot: AppSnapshot = {
+      ...snapshot,
+      status: {
+        ...snapshot.status,
+        resolvedMonitorId: "missing",
+      },
+      monitors: [],
+    };
+    const bridge = makeBridge();
+    vi.mocked(bridge.getSnapshot).mockResolvedValue(noMonitorSnapshot);
+    render(<SettingsApp bridge={bridge} />);
+
+    const viewport = await screen.findByLabelText("目标屏幕预览画布");
+    expect(viewport).toHaveAttribute("data-monitor-id", "unknown");
+    expect(viewport).toHaveStyle({ aspectRatio: "16 / 9" });
+    expect(viewport.getAttribute("style")).not.toMatch(/NaN|Infinity/);
+  });
+
   it("按百分比调整整体尺寸并防抖保存", async () => {
     vi.useFakeTimers();
     const bridge = makeBridge();
