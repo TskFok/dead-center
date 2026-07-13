@@ -1,32 +1,34 @@
 use std::path::PathBuf;
 
 use tauri::{
-    AppHandle, Emitter, Manager, PhysicalPosition, Runtime, WebviewUrl, WebviewWindowBuilder,
+    AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, Runtime, WebviewUrl,
+    WebviewWindowBuilder,
 };
 
 use crate::{
-    monitor::{centered_overlay_position, collect_monitors, monitor_infos, resolve_monitor},
+    monitor::{collect_monitors, full_screen_overlay_geometry, monitor_infos, resolve_monitor},
     state::{AppSnapshot, AppState},
 };
 
 pub const OVERLAY_LABEL: &str = "crosshair";
-pub(crate) const OVERLAY_SIZE: f64 = 256.0;
 
 pub fn create_or_refresh_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
-    if app.get_webview_window(OVERLAY_LABEL).is_none() {
-        let visible = app
-            .state::<AppState>()
-            .status
-            .lock()
-            .map_err(|error| error.to_string())?
-            .visible;
+    let should_show = app
+        .state::<AppState>()
+        .status
+        .lock()
+        .map_err(|error| error.to_string())?
+        .visible;
+    let created = app.get_webview_window(OVERLAY_LABEL).is_none();
+
+    if created {
         let mut builder = WebviewWindowBuilder::new(
             app,
             OVERLAY_LABEL,
             WebviewUrl::App(PathBuf::from("index.html?view=overlay")),
         )
         .title("Dead Center Crosshair")
-        .inner_size(OVERLAY_SIZE, OVERLAY_SIZE)
+        .inner_size(1.0, 1.0)
         .resizable(false)
         .decorations(false)
         .transparent(true)
@@ -34,7 +36,7 @@ pub fn create_or_refresh_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), S
         .always_on_top(true)
         .focusable(false)
         .skip_taskbar(true)
-        .visible(visible);
+        .visible(false);
 
         #[cfg(target_os = "macos")]
         {
@@ -47,10 +49,16 @@ pub fn create_or_refresh_overlay<R: Runtime>(app: &AppHandle<R>) -> Result<(), S
             .map_err(|error| error.to_string())?;
     }
 
-    refresh_overlay_position(app)
+    refresh_overlay_geometry(app)?;
+    if created && should_show {
+        if let Some(window) = app.get_webview_window(OVERLAY_LABEL) {
+            window.show().map_err(|error| error.to_string())?;
+        }
+    }
+    Ok(())
 }
 
-pub fn refresh_overlay_position<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+pub fn refresh_overlay_geometry<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     let monitors = collect_monitors(app)?;
     if monitors.is_empty() {
         return Err("没有检测到可用显示器".into());
@@ -63,11 +71,21 @@ pub fn refresh_overlay_position<R: Runtime>(app: &AppHandle<R>) -> Result<(), St
         .target_monitor_id
         .clone();
     let resolved = resolve_monitor(&monitors, target.as_deref());
-    let point = centered_overlay_position(resolved.monitor, OVERLAY_SIZE);
+    let geometry = full_screen_overlay_geometry(resolved.monitor)
+        .ok_or_else(|| "目标显示器缩放比例无效".to_string())?;
 
     if let Some(window) = app.get_webview_window(OVERLAY_LABEL) {
         window
-            .set_position(PhysicalPosition::new(point.x, point.y))
+            .set_position(PhysicalPosition::new(
+                geometry.position.x,
+                geometry.position.y,
+            ))
+            .map_err(|error| error.to_string())?;
+        window
+            .set_size(PhysicalSize::new(
+                geometry.physical_width,
+                geometry.physical_height,
+            ))
             .map_err(|error| error.to_string())?;
         window
             .set_always_on_top(true)

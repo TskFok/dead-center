@@ -66,7 +66,7 @@ pub fn select_monitor<R: Runtime>(
             .target_monitor_id = previous;
         return Err(error);
     }
-    overlay::refresh_overlay_position(&app)?;
+    overlay::refresh_overlay_geometry(&app)?;
     overlay::snapshot(&app)
 }
 

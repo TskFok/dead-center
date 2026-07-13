@@ -58,7 +58,7 @@ pub fn run() {
             let handle = app.handle().clone();
             thread::spawn(move || loop {
                 thread::sleep(Duration::from_secs(2));
-                if let Err(error) = overlay::refresh_overlay_position(&handle) {
+                if let Err(error) = overlay::refresh_overlay_geometry(&handle) {
                     overlay::record_overlay_error(&handle, error);
                 }
             });

@@ -19,6 +19,15 @@ pub struct PhysicalPoint {
     pub y: i32,
 }
 
+#[derive(Debug, PartialEq)]
+pub struct OverlayGeometry {
+    pub position: PhysicalPoint,
+    pub physical_width: u32,
+    pub physical_height: u32,
+    pub logical_width: f64,
+    pub logical_height: f64,
+}
+
 pub struct ResolvedMonitor<'a> {
     pub monitor: &'a MonitorGeometry,
     pub using_fallback: bool,
@@ -94,15 +103,17 @@ fn monitor_id(monitor: &Monitor) -> String {
     )
 }
 
-pub fn centered_overlay_position(
-    monitor: &MonitorGeometry,
-    overlay_logical_size: f64,
-) -> PhysicalPoint {
-    let overlay_physical_size = overlay_logical_size * monitor.scale_factor;
-    PhysicalPoint {
-        x: monitor.x + ((monitor.width as f64 - overlay_physical_size) / 2.0).round() as i32,
-        y: monitor.y + ((monitor.height as f64 - overlay_physical_size) / 2.0).round() as i32,
-    }
+pub fn full_screen_overlay_geometry(monitor: &MonitorGeometry) -> Option<OverlayGeometry> {
+    (monitor.scale_factor.is_finite() && monitor.scale_factor > 0.0).then(|| OverlayGeometry {
+        position: PhysicalPoint {
+            x: monitor.x,
+            y: monitor.y,
+        },
+        physical_width: monitor.width,
+        physical_height: monitor.height,
+        logical_width: f64::from(monitor.width) / monitor.scale_factor,
+        logical_height: f64::from(monitor.height) / monitor.scale_factor,
+    })
 }
 
 pub fn resolve_monitor<'a>(
@@ -148,35 +159,64 @@ pub fn resolved_logical_short_edge(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::overlay::OVERLAY_SIZE;
 
-    fn monitor(id: &str, x: i32, width: u32, scale_factor: f64, primary: bool) -> MonitorGeometry {
+    fn monitor(
+        id: &str,
+        x: i32,
+        y: i32,
+        width: u32,
+        height: u32,
+        scale_factor: f64,
+        primary: bool,
+    ) -> MonitorGeometry {
         MonitorGeometry {
             id: id.into(),
             name: id.into(),
             x,
-            y: 0,
+            y,
             width,
-            height: 1440,
+            height,
             scale_factor,
             primary,
         }
     }
 
     #[test]
-    fn centers_logical_overlay_on_negative_coordinate_hidpi_monitor() {
-        let monitor = monitor("left", -2560, 2560, 2.0, false);
+    fn full_screen_overlay_uses_physical_origin_and_logical_size() {
+        let monitor = monitor("left", -2560, -180, 2560, 1440, 2.0, false);
+        assert_eq!(
+            full_screen_overlay_geometry(&monitor),
+            Some(OverlayGeometry {
+                position: PhysicalPoint { x: -2560, y: -180 },
+                physical_width: 2560,
+                physical_height: 1440,
+                logical_width: 1280.0,
+                logical_height: 720.0,
+            })
+        );
+    }
 
-        let point = centered_overlay_position(&monitor, OVERLAY_SIZE);
+    #[test]
+    fn full_screen_overlay_rejects_invalid_scale_factor() {
+        let monitor = monitor("invalid", 0, 0, 1920, 1080, 0.0, true);
+        assert_eq!(full_screen_overlay_geometry(&monitor), None);
+    }
 
-        assert_eq!(point, PhysicalPoint { x: -1536, y: 464 });
+    #[test]
+    fn full_screen_overlay_preserves_portrait_dimensions() {
+        let monitor = monitor("portrait", 1920, 0, 1080, 1920, 1.25, false);
+        let geometry = full_screen_overlay_geometry(&monitor).unwrap();
+        assert_eq!(geometry.physical_width, 1080);
+        assert_eq!(geometry.physical_height, 1920);
+        assert_eq!(geometry.logical_width, 864.0);
+        assert_eq!(geometry.logical_height, 1536.0);
     }
 
     #[test]
     fn unavailable_target_falls_back_to_primary_without_losing_preference() {
         let monitors = vec![
-            monitor("primary", 0, 1920, 1.0, true),
-            monitor("right", 1920, 2560, 1.25, false),
+            monitor("primary", 0, 0, 1920, 1440, 1.0, true),
+            monitor("right", 1920, 0, 2560, 1440, 1.25, false),
         ];
 
         let resolved = resolve_monitor(&monitors, Some("missing"));
@@ -188,8 +228,8 @@ mod tests {
     #[test]
     fn available_target_is_used_even_when_not_primary() {
         let monitors = vec![
-            monitor("primary", 0, 1920, 1.0, true),
-            monitor("right", 1920, 2560, 1.25, false),
+            monitor("primary", 0, 0, 1920, 1440, 1.0, true),
+            monitor("right", 1920, 0, 2560, 1440, 1.25, false),
         ];
 
         let resolved = resolve_monitor(&monitors, Some("right"));
@@ -200,15 +240,15 @@ mod tests {
 
     #[test]
     fn logical_short_edge_accounts_for_scale_factor() {
-        let monitor = monitor("retina", 0, 2560, 2.0, true);
+        let monitor = monitor("retina", 0, 0, 2560, 1440, 2.0, true);
         assert_eq!(logical_short_edge(&monitor), Some(720.0));
     }
 
     #[test]
     fn resolved_short_edge_uses_target_fallback_and_empty_default() {
         let monitors = vec![
-            monitor("primary", 0, 1920, 1.0, true),
-            monitor("secondary", 1920, 2560, 2.0, false),
+            monitor("primary", 0, 0, 1920, 1440, 1.0, true),
+            monitor("secondary", 1920, 0, 2560, 1440, 2.0, false),
         ];
         assert_eq!(
             resolved_logical_short_edge(&monitors, Some("secondary")),
