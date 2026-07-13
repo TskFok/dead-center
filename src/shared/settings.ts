@@ -67,6 +67,9 @@ export interface AppSnapshot {
   monitors: MonitorInfo[];
 }
 
+export const CROSSHAIR_SIZE_MIN = 12;
+export const CROSSHAIR_SIZE_MAX = 192;
+
 export const DEFAULT_SETTINGS: AppSettings = {
   version: 1,
   visual: {
@@ -103,7 +106,7 @@ export function normalizeVisualSettings(
       ? value.accentColor.toUpperCase()
       : DEFAULT_SETTINGS.visual.accentColor,
     opacity: clamp(value.opacity, 0.1, 1),
-    sizePx: clamp(value.sizePx, 12, 96),
+    sizePx: clamp(value.sizePx, CROSSHAIR_SIZE_MIN, CROSSHAIR_SIZE_MAX),
     strokePx: clamp(value.strokePx, 1, 8),
     gapPx: clamp(value.gapPx, 0, 24),
   };

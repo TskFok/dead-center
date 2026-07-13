@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { Crosshair } from "./components/Crosshair";
 import type { AppBridge } from "./shared/bridge";
 import {
+  CROSSHAIR_SIZE_MAX,
+  CROSSHAIR_SIZE_MIN,
   isDiamondPreset,
   type AppSnapshot,
   type CrosshairPreset,
@@ -179,8 +181,8 @@ export function SettingsApp({ bridge }: SettingsAppProps) {
             />
             <RangeControl
               label="整体尺寸"
-              max={96}
-              min={12}
+              max={CROSSHAIR_SIZE_MAX}
+              min={CROSSHAIR_SIZE_MIN}
               suffix="px"
               value={visual.sizePx}
               onChange={(value) => setVisual({ ...visual, sizePx: value })}

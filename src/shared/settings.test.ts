@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CROSSHAIR_SIZE_MAX,
+  CROSSHAIR_SIZE_MIN,
   DEFAULT_SETTINGS,
   isDiamondPreset,
   isHexColor,
@@ -44,17 +46,19 @@ describe("isDiamondPreset", () => {
 
 describe("normalizeVisualSettings", () => {
   it("把超出范围的数值限制到产品边界", () => {
+    expect(CROSSHAIR_SIZE_MIN).toBe(12);
+    expect(CROSSHAIR_SIZE_MAX).toBe(192);
     expect(
       normalizeVisualSettings({
         ...DEFAULT_SETTINGS.visual,
         opacity: 0,
-        sizePx: 120,
+        sizePx: 240,
         strokePx: 0,
         gapPx: 30,
       }),
     ).toMatchObject({
       opacity: 0.1,
-      sizePx: 96,
+      sizePx: 192,
       strokePx: 1,
       gapPx: 24,
     });

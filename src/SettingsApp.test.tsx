@@ -64,6 +64,8 @@ describe("SettingsApp", () => {
       expect(screen.getByRole("button", { name })).toBeVisible();
     }
     expect(screen.getByLabelText("中心标记颜色")).toBeVisible();
+    expect(screen.getByLabelText("整体尺寸")).toHaveAttribute("min", "12");
+    expect(screen.getByLabelText("整体尺寸")).toHaveAttribute("max", "192");
     expect(screen.getByText("准星已显示")).toBeVisible();
   });
 
