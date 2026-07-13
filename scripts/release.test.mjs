@@ -15,6 +15,21 @@ describe("发布参数", () => {
     expect(resolveTargetVersion(parseReleaseArgs(["1.2.3"]), "0.1.9")).toBe("1.2.3");
   });
 
+  it("精确比较超出安全整数范围的版本段", () => {
+    expect(
+      resolveTargetVersion(
+        parseReleaseArgs(["1.0.9007199254740993"]),
+        "1.0.9007199254740992",
+      ),
+    ).toBe("1.0.9007199254740993");
+  });
+
+  it("精确递增超出安全整数范围的补丁号", () => {
+    expect(resolveTargetVersion(parseReleaseArgs([]), "1.0.9007199254740992")).toBe(
+      "1.0.9007199254740993",
+    );
+  });
+
   it("current 模式沿用当前版本", () => {
     expect(resolveTargetVersion(parseReleaseArgs(["--current"]), "0.1.9")).toBe("0.1.9");
   });
@@ -65,5 +80,17 @@ describe("版本清单", () => {
     expect(updated.tauriConfig).toBe(manifests.tauriConfig.replace("0.1.0", "0.1.1"));
     expect(updated.cargoToml).toBe(manifests.cargoToml.replace("0.1.0", "0.1.1"));
     expect(updated.cargoLock).toBe(manifests.cargoLock);
+  });
+
+  it("只更新顶层 JSON 版本字段", () => {
+    const nestedVersionFirst = {
+      ...manifests,
+      packageJson:
+        '{\n  "metadata": {\n    "version": "9.9.9"\n  },\n  "version": "0.1.0"\n}\n',
+    };
+
+    expect(updateVersionContents(nestedVersionFirst, "0.1.1").packageJson).toBe(
+      '{\n  "metadata": {\n    "version": "9.9.9"\n  },\n  "version": "0.1.1"\n}\n',
+    );
   });
 });

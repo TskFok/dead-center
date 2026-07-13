@@ -5,7 +5,7 @@ function parseVersion(version) {
   if (!match) {
     throw new Error(`版本 ${version} 不是稳定 SemVer（格式必须为 x.y.z）`);
   }
-  return match.slice(1).map(Number);
+  return match.slice(1).map(BigInt);
 }
 
 function compareVersions(left, right) {
@@ -13,7 +13,7 @@ function compareVersions(left, right) {
   const rightParts = parseVersion(right);
   for (let index = 0; index < leftParts.length; index += 1) {
     if (leftParts[index] !== rightParts[index]) {
-      return leftParts[index] - rightParts[index];
+      return leftParts[index] < rightParts[index] ? -1 : 1;
     }
   }
   return 0;
@@ -31,7 +31,7 @@ export function parseReleaseArgs(args) {
 export function resolveTargetVersion(request, current) {
   const [major, minor, patch] = parseVersion(current);
   if (request.mode === "current") return current;
-  if (request.mode === "next-patch") return `${major}.${minor}.${patch + 1}`;
+  if (request.mode === "next-patch") return `${major}.${minor}.${patch + 1n}`;
   if (compareVersions(request.version, current) <= 0) {
     throw new Error(`目标版本 ${request.version} 必须高于当前版本 ${current}`);
   }
@@ -91,7 +91,32 @@ export function getConsistentVersion(contents) {
 
 function replaceJsonVersion(content, version, path) {
   jsonVersion(content, path);
-  return content.replace(/("version"\s*:\s*")[^"]+("\s*[,}])/, `$1${version}$2`);
+  const versionPattern = /("version"\s*:\s*")[^"]+("\s*[,}])/g;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let cursor = 0;
+
+  for (const match of content.matchAll(versionPattern)) {
+    while (cursor < match.index) {
+      const character = content[cursor];
+      cursor += 1;
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (character === "\\") escaped = true;
+        else if (character === '"') inString = false;
+      } else if (character === '"') inString = true;
+      else if (character === "{" || character === "[") depth += 1;
+      else if (character === "}" || character === "]") depth -= 1;
+    }
+
+    if (!inString && depth === 1) {
+      return `${content.slice(0, match.index)}${match[1]}${version}${match[2]}${content.slice(
+        match.index + match[0].length,
+      )}`;
+    }
+  }
+  throw new Error(`${path} 缺少字符串 version`);
 }
 
 function replaceCargoVersion(content, version) {
