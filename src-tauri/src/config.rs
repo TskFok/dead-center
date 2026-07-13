@@ -27,7 +27,7 @@ pub struct VisualSettings {
 impl VisualSettings {
     pub fn normalize(&mut self) {
         self.opacity = self.opacity.clamp(0.1, 1.0);
-        self.size_px = self.size_px.clamp(12.0, 96.0);
+        self.size_px = self.size_px.clamp(12.0, 192.0);
         self.stroke_px = self.stroke_px.clamp(1.0, 8.0);
         self.gap_px = self.gap_px.clamp(0.0, 24.0);
 
@@ -124,7 +124,7 @@ mod tests {
     fn validation_clamps_visual_ranges() {
         let mut visual = VisualSettings {
             opacity: 0.0,
-            size_px: 120.0,
+            size_px: 240.0,
             stroke_px: 0.0,
             gap_px: 30.0,
             ..AppSettings::default().visual
@@ -133,7 +133,7 @@ mod tests {
         visual.normalize();
 
         assert_eq!(visual.opacity, 0.1);
-        assert_eq!(visual.size_px, 96.0);
+        assert_eq!(visual.size_px, 192.0);
         assert_eq!(visual.stroke_px, 1.0);
         assert_eq!(visual.gap_px, 24.0);
     }
