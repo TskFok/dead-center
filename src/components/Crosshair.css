@@ -133,9 +133,9 @@
     max(calc(var(--crosshair-stroke) + 3px), 4px),
     24%
   );
-  --flag-clearance-cap: 40%;
-  --diamond-clearance: 16%;
-  --diamond-size: clamp(6px, 24%, 20px);
+  --flag-clearance-cap: 39%;
+  --diamond-clearance: 13%;
+  --diamond-size: clamp(2px, 17%, 20px);
   --diamond-stroke-cap: 0px;
 }
 
