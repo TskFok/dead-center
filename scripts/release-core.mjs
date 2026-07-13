@@ -46,7 +46,16 @@ const VERSION_PATHS = {
 };
 
 function jsonVersion(content, path) {
-  const value = JSON.parse(content).version;
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch (error) {
+    throw new Error(
+      `${path} JSON 解析失败：${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+  const value = parsed.version;
   if (typeof value !== "string") throw new Error(`${path} 缺少字符串 version`);
   parseVersion(value);
   return value;

@@ -46,14 +46,8 @@ function writeContents(cwd, fileSystem, contents) {
   }
 }
 
-function repositoryPreflight(cwd, execute) {
+function ensureBranchSynchronized(cwd, branch, execute) {
   const run = (command, args, capture = false) => execute(command, args, { cwd, capture });
-  if (run("git", ["status", "--porcelain"], true) !== "") {
-    throw new Error("工作区不干净，请先提交或暂存现有修改");
-  }
-  const branch = run("git", ["symbolic-ref", "--short", "HEAD"], true);
-  if (!branch) throw new Error("当前处于 detached HEAD，不能发布");
-  run("git", ["remote", "get-url", "origin"], true);
   run("git", [
     "fetch",
     "--no-tags",
@@ -68,6 +62,17 @@ function repositoryPreflight(cwd, execute) {
   if (!/^0\s+0$/.test(sync)) {
     throw new Error(`当前分支与 origin/${branch} 未完全同步：${sync}`);
   }
+}
+
+function repositoryPreflight(cwd, execute) {
+  const run = (command, args, capture = false) => execute(command, args, { cwd, capture });
+  if (run("git", ["status", "--porcelain"], true) !== "") {
+    throw new Error("工作区不干净，请先提交或暂存现有修改");
+  }
+  const branch = run("git", ["branch", "--show-current"], true);
+  if (!branch) throw new Error("当前处于 detached HEAD，不能发布");
+  run("git", ["remote", "get-url", "origin"], true);
+  ensureBranchSynchronized(cwd, branch, execute);
   return branch;
 }
 
@@ -80,9 +85,29 @@ function ensureNewTag(tag, cwd, execute) {
   if (local || remote) throw new Error(`标签 ${tag} 已存在；重发当前版本请使用 --current`);
 }
 
-function runChecks(cwd, execute) {
-  execute("pnpm", ["test"], { cwd });
-  execute("pnpm", ["build"], { cwd });
+export function resolvePnpmCommand(
+  args,
+  {
+    platform = process.platform,
+    nodePath = process.execPath,
+    npmExecPath = process.env.npm_execpath,
+  } = {},
+) {
+  if (platform !== "win32") return { command: "pnpm", args };
+  if (!npmExecPath) {
+    throw new Error("Windows 下无法定位 pnpm 的 JavaScript 入口：缺少 npm_execpath");
+  }
+  return { command: nodePath, args: [npmExecPath, ...args] };
+}
+
+function runPnpm(cwd, execute, args, runtime) {
+  const invocation = resolvePnpmCommand(args, runtime);
+  execute(invocation.command, invocation.args, { cwd });
+}
+
+function runChecks(cwd, execute, runtime) {
+  runPnpm(cwd, execute, ["test"], runtime);
+  runPnpm(cwd, execute, ["build"], runtime);
   execute("cargo", ["test", "--manifest-path", "src-tauri/Cargo.toml"], { cwd });
 }
 
@@ -92,6 +117,7 @@ export function runRelease({
   execute = systemExecute,
   fileSystem = nodeFs,
   output = console,
+  runtime,
 }) {
   const request = parseReleaseArgs(args);
   const original = readContents(cwd, fileSystem);
@@ -102,9 +128,10 @@ export function runRelease({
   if (request.mode !== "current") ensureNewTag(tag, cwd, execute);
 
   output.log(`准备发布 ${tag}，开始本地校验……`);
-  runChecks(cwd, execute);
+  runChecks(cwd, execute, runtime);
 
   if (request.mode === "current") {
+    ensureBranchSynchronized(cwd, branch, execute);
     execute("git", ["tag", "-f", "-a", tag, "-m", `发布 ${tag}`], { cwd });
     execute("git", ["push", "--force", "origin", `refs/tags/${tag}`], { cwd });
     output.log(`${tag} 已重新推送，GitHub Actions 将重新构建 Release。`);
