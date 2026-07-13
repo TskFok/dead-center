@@ -1,13 +1,21 @@
 import type { CSSProperties } from "react";
 
-import type { VisualSettings } from "../shared/settings";
+import {
+  isDiamondPreset,
+  type CrosshairPreset,
+  type VisualSettings,
+} from "../shared/settings";
 import "./Crosshair.css";
 
 const PRESET_LABELS = {
   "dot-ring": "圆环与中心点",
   "classic-cross": "缺口十字",
   "soft-target": "柔和同心标记",
-} as const;
+  "fine-diamond": "细旗空心菱形",
+  "inward-diamond": "内向旗空心菱形",
+  "long-diamond": "长旗空心菱形",
+  "solid-diamond": "长旗实心菱形",
+} satisfies Record<CrosshairPreset, string>;
 
 type CrosshairStyle = CSSProperties & {
   "--crosshair-primary": string;
@@ -30,6 +38,11 @@ export function Crosshair({ settings }: CrosshairProps) {
     "--crosshair-stroke": `${settings.strokePx}px`,
     "--crosshair-gap": `${settings.gapPx}px`,
   };
+  const diamondPreset = isDiamondPreset(settings.preset);
+  const diamondClass =
+    settings.preset === "solid-diamond"
+      ? "crosshair__diamond--solid"
+      : "crosshair__diamond--outline";
 
   return (
     <div
@@ -55,7 +68,31 @@ export function Crosshair({ settings }: CrosshairProps) {
           <span className="crosshair__ring crosshair__ring--outer" />
         </>
       )}
-      <span className="crosshair__dot" />
+      {diamondPreset && (
+        <>
+          <span
+            aria-hidden="true"
+            className="crosshair__flag crosshair__flag--top"
+          />
+          <span
+            aria-hidden="true"
+            className="crosshair__flag crosshair__flag--right"
+          />
+          <span
+            aria-hidden="true"
+            className="crosshair__flag crosshair__flag--bottom"
+          />
+          <span
+            aria-hidden="true"
+            className="crosshair__flag crosshair__flag--left"
+          />
+          <span
+            aria-hidden="true"
+            className={`crosshair__diamond ${diamondClass}`}
+          />
+        </>
+      )}
+      {!diamondPreset && <span className="crosshair__dot" />}
     </div>
   );
 }

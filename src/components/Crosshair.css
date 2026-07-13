@@ -79,3 +79,166 @@
   height: 100%;
   opacity: 0.42;
 }
+
+.crosshair--fine-diamond,
+.crosshair--inward-diamond,
+.crosshair--long-diamond,
+.crosshair--solid-diamond {
+  --flag-clearance: min(
+    var(--flag-clearance-cap),
+    max(calc(var(--crosshair-gap) / 2), var(--diamond-clearance))
+  );
+  --diamond-stroke: min(
+    var(--crosshair-stroke),
+    var(--diamond-stroke-cap)
+  );
+}
+
+.crosshair--fine-diamond {
+  --flag-inset: 22%;
+  --flag-thickness: min(max(var(--crosshair-stroke), 1px), 12%);
+  --flag-clearance-cap: 24%;
+  --diamond-clearance: 12%;
+  --diamond-size: clamp(4px, 18%, 14px);
+  --diamond-stroke-cap: 1px;
+}
+
+.crosshair--inward-diamond {
+  --flag-inset: 14%;
+  --flag-thickness: min(
+    max(calc(var(--crosshair-stroke) + 1px), 2px),
+    16%
+  );
+  --flag-clearance-cap: 32%;
+  --diamond-clearance: 13%;
+  --diamond-size: clamp(5px, 20%, 16px);
+  --diamond-stroke-cap: 1.5px;
+}
+
+.crosshair--long-diamond {
+  --flag-inset: 0%;
+  --flag-thickness: min(
+    max(calc(var(--crosshair-stroke) + 2px), 3px),
+    20%
+  );
+  --flag-clearance-cap: 40%;
+  --diamond-clearance: 14%;
+  --diamond-size: clamp(6px, 22%, 18px);
+  --diamond-stroke-cap: 2px;
+}
+
+.crosshair--solid-diamond {
+  --flag-inset: 0%;
+  --flag-thickness: min(
+    max(calc(var(--crosshair-stroke) + 3px), 4px),
+    24%
+  );
+  --flag-clearance-cap: 40%;
+  --diamond-clearance: 16%;
+  --diamond-size: clamp(6px, 24%, 20px);
+  --diamond-stroke-cap: 0px;
+}
+
+.crosshair__flag {
+  position: absolute;
+  display: block;
+  background: var(--crosshair-primary);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.75);
+}
+
+.crosshair__flag--left,
+.crosshair__flag--right {
+  top: calc(50% - var(--flag-thickness) / 2);
+  width: max(
+    0px,
+    calc(50% - var(--flag-clearance) - var(--flag-inset))
+  );
+  height: var(--flag-thickness);
+}
+
+.crosshair__flag--left {
+  left: var(--flag-inset);
+}
+
+.crosshair__flag--right {
+  right: var(--flag-inset);
+}
+
+.crosshair__flag--top,
+.crosshair__flag--bottom {
+  left: calc(50% - var(--flag-thickness) / 2);
+  width: var(--flag-thickness);
+  height: max(
+    0px,
+    calc(50% - var(--flag-clearance) - var(--flag-inset))
+  );
+}
+
+.crosshair__flag--top {
+  top: var(--flag-inset);
+}
+
+.crosshair__flag--bottom {
+  bottom: var(--flag-inset);
+}
+
+:is(.crosshair--fine-diamond, .crosshair--long-diamond)
+  .crosshair__flag--left {
+  clip-path: polygon(0 50%, 18% 0, 100% 0, 100% 100%, 18% 100%);
+}
+
+:is(.crosshair--fine-diamond, .crosshair--long-diamond)
+  .crosshair__flag--right {
+  clip-path: polygon(0 0, 82% 0, 100% 50%, 82% 100%, 0 100%);
+}
+
+:is(.crosshair--fine-diamond, .crosshair--long-diamond)
+  .crosshair__flag--top {
+  clip-path: polygon(50% 0, 100% 18%, 100% 100%, 0 100%, 0 18%);
+}
+
+:is(.crosshair--fine-diamond, .crosshair--long-diamond)
+  .crosshair__flag--bottom {
+  clip-path: polygon(0 0, 100% 0, 100% 82%, 50% 100%, 0 82%);
+}
+
+:is(.crosshair--inward-diamond, .crosshair--solid-diamond)
+  .crosshair__flag--left {
+  clip-path: polygon(0 0, 82% 0, 100% 50%, 82% 100%, 0 100%);
+}
+
+:is(.crosshair--inward-diamond, .crosshair--solid-diamond)
+  .crosshair__flag--right {
+  clip-path: polygon(18% 0, 100% 0, 100% 100%, 18% 100%, 0 50%);
+}
+
+:is(.crosshair--inward-diamond, .crosshair--solid-diamond)
+  .crosshair__flag--top {
+  clip-path: polygon(0 0, 100% 0, 100% 82%, 50% 100%, 0 82%);
+}
+
+:is(.crosshair--inward-diamond, .crosshair--solid-diamond)
+  .crosshair__flag--bottom {
+  clip-path: polygon(50% 0, 100% 18%, 100% 100%, 0 100%, 0 18%);
+}
+
+.crosshair__diamond {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--diamond-size);
+  height: var(--diamond-size);
+  box-sizing: border-box;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.crosshair__diamond--outline {
+  border: var(--diamond-stroke) solid var(--crosshair-accent);
+  background: transparent;
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.72);
+}
+
+.crosshair__diamond--solid {
+  background: var(--crosshair-accent);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.72);
+}
