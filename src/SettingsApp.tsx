@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 
 import { Crosshair } from "./components/Crosshair";
 import type { AppBridge } from "./shared/bridge";
-import type {
-  AppSnapshot,
-  CrosshairPreset,
-  VisualSettings,
+import {
+  isDiamondPreset,
+  type AppSnapshot,
+  type CrosshairPreset,
+  type VisualSettings,
 } from "./shared/settings";
 import "./SettingsApp.css";
 
@@ -17,6 +18,10 @@ const PRESETS: Array<{
   { id: "dot-ring", name: "圆环与中心点", hint: "稳定视线锚点" },
   { id: "classic-cross", name: "缺口十字", hint: "复杂画面清晰" },
   { id: "soft-target", name: "柔和同心标记", hint: "长时间低干扰" },
+  { id: "fine-diamond", name: "细旗空心菱形", hint: "轻量低干扰" },
+  { id: "inward-diamond", name: "内向旗空心菱形", hint: "朝心方向提示" },
+  { id: "long-diamond", name: "长旗空心菱形", hint: "远距保持清晰" },
+  { id: "solid-diamond", name: "长旗实心菱形", hint: "强化中心锚点" },
 ];
 
 interface SettingsAppProps {
@@ -189,7 +194,9 @@ export function SettingsApp({ bridge }: SettingsAppProps) {
               onChange={(value) => setVisual({ ...visual, strokePx: value })}
             />
             <RangeControl
-              disabled={visual.preset !== "classic-cross"}
+              disabled={
+                visual.preset !== "classic-cross" && !isDiamondPreset(visual.preset)
+              }
               label="中心缺口"
               max={24}
               min={0}
@@ -205,7 +212,7 @@ export function SettingsApp({ bridge }: SettingsAppProps) {
                 onChange={(primaryColor) => setVisual({ ...visual, primaryColor })}
               />
               <ColorControl
-                label="中心点颜色"
+                label="中心标记颜色"
                 value={visual.accentColor}
                 onChange={(accentColor) => setVisual({ ...visual, accentColor })}
               />
