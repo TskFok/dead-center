@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Dead Center",
+  "version": "0.1.0",
+  "identifier": "com.deadcenter.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "label": "settings",
+        "title": "Dead Center · 防晕 3D 准星",
+        "width": 980,
+        "height": 760,
+        "minWidth": 820,
+        "minHeight": 640,
+        "center": true,
+        "backgroundColor": "#080B11"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Productivity",
+    "shortDescription": "始终置顶的防晕 3D 屏幕准星",
+    "longDescription": "Dead Center 在屏幕中心显示可调节、鼠标穿透的准星，为 3D 游戏提供稳定的视觉锚点。",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

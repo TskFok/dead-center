@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Dead Center 本地窗口权限",
+  "windows": ["settings", "crosshair"],
+  "permissions": [
+    "core:default"
+  ]
+}
