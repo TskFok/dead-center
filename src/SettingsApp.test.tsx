@@ -102,6 +102,116 @@ describe("SettingsApp", () => {
     expect(viewport).toHaveStyle({ aspectRatio: "1920 / 1200" });
   });
 
+  it("运行时变化后刷新完整屏幕快照且保留防抖中的草稿", async () => {
+    vi.useFakeTimers();
+    const fallbackSnapshot: AppSnapshot = {
+      ...snapshot,
+      settings: {
+        ...snapshot.settings,
+        visual: {
+          ...snapshot.settings.visual,
+          sizePercent: 73,
+        },
+        targetMonitorId: "fallback",
+        toggleShortcut: "Alt+Shift+R",
+      },
+      status: {
+        ...snapshot.status,
+        resolvedMonitorId: "fallback",
+        usingFallbackMonitor: true,
+      },
+      monitors: [
+        ...snapshot.monitors,
+        {
+          id: "fallback",
+          name: "运行时回退屏幕",
+          isPrimary: false,
+          width: 1920,
+          height: 1200,
+          scaleFactor: 1,
+        },
+      ],
+    };
+    let runtimeHandler: Parameters<AppBridge["onRuntimeChanged"]>[0] | undefined;
+    const bridge = makeBridge();
+    vi.mocked(bridge.getSnapshot)
+      .mockResolvedValueOnce(snapshot)
+      .mockResolvedValueOnce(fallbackSnapshot);
+    vi.mocked(bridge.onRuntimeChanged).mockImplementation(async (handler) => {
+      runtimeHandler = handler;
+      return () => undefined;
+    });
+    render(<SettingsApp bridge={bridge} />);
+    await act(async () => undefined);
+
+    fireEvent.change(screen.getByLabelText("整体尺寸"), {
+      target: { value: "25" },
+    });
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "Alt+Shift+D" },
+    });
+    expect(runtimeHandler).toBeTypeOf("function");
+
+    await act(async () => runtimeHandler?.(fallbackSnapshot.status));
+
+    expect(bridge.getSnapshot).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("option", { name: "运行时回退屏幕 · 1920×1200" })).toBeVisible();
+    expect(screen.getByText("目标屏幕离线，已回退主屏")).toBeVisible();
+    const viewport = screen.getByLabelText("目标屏幕预览画布");
+    expect(viewport).toHaveAttribute("data-monitor-id", "fallback");
+    expect(viewport).toHaveStyle({ aspectRatio: "1920 / 1200" });
+    expect(screen.getByLabelText("整体尺寸")).toHaveValue("25");
+    expect(screen.getByRole("textbox")).toHaveValue("Alt+Shift+D");
+    expect(bridge.updateVisual).not.toHaveBeenCalled();
+  });
+
+  it("处理运行时订阅和快照刷新失败", async () => {
+    const subscriptionBridge = makeBridge();
+    vi.mocked(subscriptionBridge.onRuntimeChanged).mockRejectedValue(
+      new Error("运行时订阅失败"),
+    );
+    const first = render(<SettingsApp bridge={subscriptionBridge} />);
+    expect(await screen.findByText("运行时订阅失败")).toBeVisible();
+    first.unmount();
+
+    let runtimeHandler: Parameters<AppBridge["onRuntimeChanged"]>[0] | undefined;
+    const refreshBridge = makeBridge();
+    vi.mocked(refreshBridge.getSnapshot)
+      .mockResolvedValueOnce(snapshot)
+      .mockRejectedValueOnce(new Error("运行时快照失败"));
+    vi.mocked(refreshBridge.onRuntimeChanged).mockImplementation(async (handler) => {
+      runtimeHandler = handler;
+      return () => undefined;
+    });
+    render(<SettingsApp bridge={refreshBridge} />);
+    await act(async () => undefined);
+    expect(runtimeHandler).toBeTypeOf("function");
+
+    await act(async () => runtimeHandler?.(snapshot.status));
+
+    expect(await screen.findByText("运行时快照失败")).toBeVisible();
+  });
+
+  it("卸载时可靠解除尚在注册中的运行时监听", async () => {
+    let resolveUnlisten: ((unlisten: () => void) => void) | undefined;
+    const unlisten = vi.fn();
+    const bridge = makeBridge();
+    vi.mocked(bridge.onRuntimeChanged).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveUnlisten = resolve;
+        }),
+    );
+    const view = render(<SettingsApp bridge={bridge} />);
+    await act(async () => undefined);
+    expect(bridge.onRuntimeChanged).toHaveBeenCalledOnce();
+
+    view.unmount();
+    await act(async () => resolveUnlisten?.(unlisten));
+
+    expect(unlisten).toHaveBeenCalledOnce();
+  });
+
   it("解析屏幕尺寸无效时回退到有效主屏比例", async () => {
     const invalidResolvedSnapshot: AppSnapshot = {
       ...snapshot,

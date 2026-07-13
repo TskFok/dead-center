@@ -108,24 +108,56 @@ trait OverlaySyncContext: Send + 'static {
     fn record_overlay_failure(&self, error: String);
 }
 
+fn combine_hide_failure(error: String, hide_error: String) -> String {
+    format!("{error}；同时隐藏覆盖层失败：{hide_error}")
+}
+
+fn hide_after_failure<C>(context: &C, error: String) -> String
+where
+    C: OverlaySyncContext,
+{
+    match context.window().map(|window| window.hide()) {
+        Some(Err(hide_error)) => combine_hide_failure(error, hide_error),
+        _ => error,
+    }
+}
+
 fn execute_overlay_sync<C>(context: &C, create_if_missing: bool) -> Result<(), String>
 where
     C: OverlaySyncContext,
 {
-    let should_show = context.desired_visibility()?;
-    let resolved = context.resolve_geometry()?;
+    let should_show = context
+        .desired_visibility()
+        .map_err(|error| hide_after_failure(context, error))?;
+    let hide_before_sync = if should_show {
+        None
+    } else {
+        context.window().map(|window| window.hide())
+    };
 
-    if create_if_missing && context.window().is_none() {
-        context.create_window()?;
+    let sync_result = (|| {
+        let resolved = context.resolve_geometry()?;
+
+        if create_if_missing && context.window().is_none() {
+            context.create_window()?;
+        }
+
+        if let Some(window) = context.window() {
+            apply_overlay_window_state(&window, &resolved.geometry, should_show)?;
+        } else if should_show {
+            return Err("覆盖层窗口不存在".into());
+        }
+
+        context.record_overlay_success(&resolved)
+    })();
+
+    match (sync_result, hide_before_sync) {
+        (Ok(()), Some(Err(hide_error))) => Err(format!("隐藏覆盖层失败：{hide_error}")),
+        (Ok(()), _) => Ok(()),
+        (Err(error), Some(Err(hide_error))) => Err(combine_hide_failure(error, hide_error)),
+        (Err(error), Some(Ok(()))) => Err(error),
+        (Err(error), None) => Err(hide_after_failure(context, error)),
     }
-
-    if let Some(window) = context.window() {
-        apply_overlay_window_state(&window, &resolved.geometry, should_show)?;
-    } else if should_show {
-        return Err("覆盖层窗口不存在".into());
-    }
-
-    context.record_overlay_success(&resolved)
 }
 
 fn schedule_overlay_sync<S, C>(
@@ -328,30 +360,46 @@ mod tests {
 
     struct FakeWindow {
         operations: Mutex<Vec<Operation>>,
-        fail_once: Mutex<Option<Operation>>,
+        failures: Mutex<Vec<Operation>>,
+        visible: Mutex<bool>,
     }
 
     impl FakeWindow {
-        fn new(fail_once: Option<Operation>) -> Self {
+        fn new(visible: bool, fail_once: Option<Operation>) -> Self {
+            Self::with_failures(visible, fail_once.into_iter())
+        }
+
+        fn with_failures(visible: bool, failures: impl IntoIterator<Item = Operation>) -> Self {
             Self {
                 operations: Mutex::new(Vec::new()),
-                fail_once: Mutex::new(fail_once),
+                failures: Mutex::new(failures.into_iter().collect()),
+                visible: Mutex::new(visible),
             }
         }
 
         fn perform(&self, operation: Operation) -> Result<(), String> {
             self.operations.lock().unwrap().push(operation);
-            let should_fail = self.fail_once.lock().unwrap().as_ref() == Some(&operation);
-            if should_fail {
-                self.fail_once.lock().unwrap().take();
+            let mut failures = self.failures.lock().unwrap();
+            if let Some(index) = failures.iter().position(|failure| *failure == operation) {
+                failures.remove(index);
                 Err("计划内失败".into())
             } else {
+                drop(failures);
+                match operation {
+                    Operation::Show => *self.visible.lock().unwrap() = true,
+                    Operation::Hide => *self.visible.lock().unwrap() = false,
+                    _ => {}
+                }
                 Ok(())
             }
         }
 
         fn operations(&self) -> Vec<Operation> {
             self.operations.lock().unwrap().clone()
+        }
+
+        fn is_visible(&self) -> bool {
+            *self.visible.lock().unwrap()
         }
     }
 
@@ -438,15 +486,17 @@ mod tests {
 
     #[test]
     fn applies_geometry_and_safety_before_syncing_visibility() {
-        let visible_window = FakeWindow::new(None);
+        let visible_window = FakeWindow::new(false, None);
         apply_overlay_window_state(&visible_window, &geometry(), true).unwrap();
         assert_eq!(visible_window.operations(), safe_show_sequence());
+        assert!(visible_window.is_visible());
 
-        let hidden_window = FakeWindow::new(None);
+        let hidden_window = FakeWindow::new(true, None);
         apply_overlay_window_state(&hidden_window, &geometry(), false).unwrap();
         let mut expected = safe_show_sequence();
         *expected.last_mut().unwrap() = Operation::Hide;
         assert_eq!(hidden_window.operations(), expected);
+        assert!(!hidden_window.is_visible());
     }
 
     #[test]
@@ -458,16 +508,17 @@ mod tests {
             Operation::AlwaysOnTop,
             Operation::Focusable,
         ] {
-            let window = FakeWindow::new(Some(failing_operation));
+            let window = FakeWindow::new(false, Some(failing_operation));
             assert!(apply_overlay_window_state(&window, &geometry(), true).is_err());
             assert!(!window.operations().contains(&Operation::Show));
+            assert!(!window.is_visible());
         }
     }
 
     #[test]
     fn retries_failed_geometry_or_pointer_safety_and_can_recover_visibility() {
         for failing_operation in [Operation::Position(-2560, -180), Operation::IgnoreCursor] {
-            let window = FakeWindow::new(Some(failing_operation));
+            let window = FakeWindow::new(false, Some(failing_operation));
             assert!(apply_overlay_window_state(&window, &geometry(), true).is_err());
 
             apply_overlay_window_state(&window, &geometry(), true).unwrap();
@@ -481,6 +532,7 @@ mod tests {
                     .count(),
                 1
             );
+            assert!(window.is_visible());
         }
     }
 
@@ -495,17 +547,23 @@ mod tests {
         status: Arc<Mutex<FakeStatus>>,
         events: Arc<Mutex<Vec<FakeStatus>>>,
         window: Arc<FakeWindow>,
+        geometry_error: Arc<Mutex<Option<String>>>,
     }
 
     impl FakeOverlayTarget {
         fn new(visible: bool, fail_once: Option<Operation>) -> Self {
+            Self::with_failures(visible, fail_once.into_iter())
+        }
+
+        fn with_failures(visible: bool, failures: impl IntoIterator<Item = Operation>) -> Self {
             Self {
                 status: Arc::new(Mutex::new(FakeStatus {
                     visible,
                     error: None,
                 })),
                 events: Arc::new(Mutex::new(Vec::new())),
-                window: Arc::new(FakeWindow::new(fail_once)),
+                window: Arc::new(FakeWindow::with_failures(visible, failures)),
+                geometry_error: Arc::new(Mutex::new(None)),
             }
         }
 
@@ -515,6 +573,10 @@ mod tests {
 
         fn status(&self) -> FakeStatus {
             self.status.lock().unwrap().clone()
+        }
+
+        fn set_geometry_error(&self, error: Option<&str>) {
+            *self.geometry_error.lock().unwrap() = error.map(str::to_owned);
         }
 
         fn publish_status(&self) {
@@ -530,6 +592,9 @@ mod tests {
         }
 
         fn resolve_geometry(&self) -> Result<ResolvedOverlayGeometry, String> {
+            if let Some(error) = self.geometry_error.lock().unwrap().clone() {
+                return Err(error);
+            }
             Ok(ResolvedOverlayGeometry {
                 geometry: geometry(),
                 monitor_id: "fake".into(),
@@ -597,6 +662,7 @@ mod tests {
         main_thread.run_next();
 
         assert_eq!(target.window.operations().last(), Some(&Operation::Hide));
+        assert!(!target.window.is_visible());
     }
 
     #[test]
@@ -614,23 +680,92 @@ mod tests {
 
         assert!(target.status().visible);
         assert_eq!(target.window.operations().last(), Some(&Operation::Show));
+        assert!(target.window.is_visible());
     }
 
     #[test]
-    fn scheduled_window_failure_is_recorded_and_never_reaches_show() {
+    fn visible_geometry_failure_hides_existing_window() {
+        let main_thread = ControlledMainThread::default();
+        let target = FakeOverlayTarget::new(true, None);
+        target.set_geometry_error(Some("几何解析失败"));
+
+        schedule_overlay_sync(&main_thread, target.clone(), false).unwrap();
+        main_thread.run_next();
+
+        assert!(!target.window.is_visible());
+        assert_eq!(target.window.operations(), vec![Operation::Hide]);
+        assert_eq!(target.status().error.as_deref(), Some("几何解析失败"));
+    }
+
+    #[test]
+    fn every_pre_visibility_window_failure_hides_existing_window() {
+        for failing_operation in [
+            Operation::Position(-2560, -180),
+            Operation::Size(2560, 1440),
+            Operation::IgnoreCursor,
+            Operation::AlwaysOnTop,
+            Operation::Focusable,
+        ] {
+            let main_thread = ControlledMainThread::default();
+            let target = FakeOverlayTarget::new(true, Some(failing_operation));
+
+            schedule_overlay_sync(&main_thread, target.clone(), false).unwrap();
+            main_thread.run_next();
+
+            assert!(!target.window.is_visible(), "{failing_operation:?}");
+            assert!(!target.window.operations().contains(&Operation::Show));
+            assert_eq!(target.window.operations().last(), Some(&Operation::Hide));
+            assert_eq!(target.status().error.as_deref(), Some("计划内失败"));
+            assert_eq!(target.events.lock().unwrap().last(), Some(&target.status()));
+        }
+    }
+
+    #[test]
+    fn hidden_geometry_failure_hides_before_resolving_geometry() {
+        let main_thread = ControlledMainThread::default();
+        let target = FakeOverlayTarget::new(true, None);
+        target.set_visible(false);
+        target.set_geometry_error(Some("隐藏请求几何失败"));
+
+        schedule_overlay_sync(&main_thread, target.clone(), false).unwrap();
+        main_thread.run_next();
+
+        assert!(!target.window.is_visible());
+        assert_eq!(target.window.operations(), vec![Operation::Hide]);
+        assert_eq!(target.status().error.as_deref(), Some("隐藏请求几何失败"));
+    }
+
+    #[test]
+    fn failure_keeps_original_error_when_best_effort_hide_also_fails() {
+        let main_thread = ControlledMainThread::default();
+        let target =
+            FakeOverlayTarget::with_failures(true, [Operation::Size(2560, 1440), Operation::Hide]);
+
+        schedule_overlay_sync(&main_thread, target.clone(), false).unwrap();
+        main_thread.run_next();
+
+        let error = target.status().error.unwrap();
+        assert!(error.starts_with("计划内失败"));
+        assert!(error.contains("隐藏覆盖层失败"));
+        assert!(target.window.is_visible());
+    }
+
+    #[test]
+    fn scheduled_window_failure_is_recorded_and_next_sync_recovers_visibility() {
         let main_thread = ControlledMainThread::default();
         let target = FakeOverlayTarget::new(true, Some(Operation::IgnoreCursor));
 
         assert!(schedule_overlay_sync(&main_thread, target.clone(), false).is_ok());
         main_thread.run_next();
 
-        assert!(!target.window.operations().contains(&Operation::Show));
+        assert!(!target.window.is_visible());
         assert_eq!(target.status().error.as_deref(), Some("计划内失败"));
         assert_eq!(target.events.lock().unwrap().last(), Some(&target.status()));
 
         schedule_overlay_sync(&main_thread, target.clone(), false).unwrap();
         main_thread.run_next();
         assert_eq!(target.window.operations().last(), Some(&Operation::Show));
+        assert!(target.window.is_visible());
         assert_eq!(target.status().error, None);
     }
 }

@@ -49,14 +49,48 @@ export function SettingsApp({ bridge }: SettingsAppProps) {
   const visualReady = useRef(false);
 
   useEffect(() => {
+    let active = true;
+    let unlisten: (() => void) | undefined;
+
     bridge
       .getSnapshot()
       .then((next) => {
+        if (!active) return;
         setSnapshot(next);
         setVisual(next.settings.visual);
         setShortcutDraft(next.settings.toggleShortcut);
       })
-      .catch((reason) => setError(errorMessage(reason)));
+      .catch((reason) => {
+        if (active) setError(errorMessage(reason));
+      });
+
+    const refreshRuntimeSnapshot = async () => {
+      try {
+        const next = await bridge.getSnapshot();
+        if (!active) return;
+        setSnapshot(next);
+        setError(null);
+      } catch (reason) {
+        if (active) setError(errorMessage(reason));
+      }
+    };
+
+    bridge
+      .onRuntimeChanged(() => {
+        void refreshRuntimeSnapshot();
+      })
+      .then((stop) => {
+        if (active) unlisten = stop;
+        else stop();
+      })
+      .catch((reason) => {
+        if (active) setError(errorMessage(reason));
+      });
+
+    return () => {
+      active = false;
+      unlisten?.();
+    };
   }, [bridge]);
 
   useEffect(() => {

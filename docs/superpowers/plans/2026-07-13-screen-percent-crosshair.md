@@ -54,7 +54,7 @@
 - Consumes: 版本 1 JSON 的 `visual.sizePx` 与 `MonitorGeometry { width, height, scale_factor }`。
 - Produces: `VisualSettings.sizePercent`、`AppSettings.version = 2`、`logical_short_edge(&MonitorGeometry) -> Option<f64>`、`resolved_logical_short_edge(&[MonitorGeometry], Option<&str>) -> Option<f64>`、`migrate_v1_settings(LegacyAppSettingsV1, Option<f64>) -> AppSettings`。
 
-- [ ] **Step 1：写前端百分比协议和设置页失败测试**
+- [x] **Step 1：写前端百分比协议和设置页失败测试**
 
 在 `src/shared/settings.test.ts` 把默认值与边界用例改为：
 
@@ -133,13 +133,13 @@ expect(crosshair).toHaveStyle({ opacity: "0.8" });
 expect(crosshair.style.getPropertyValue("--crosshair-size")).toBe("3cqmin");
 ```
 
-- [ ] **Step 2：运行前端目标测试并确认 RED**
+- [x] **Step 2：运行前端目标测试并确认 RED**
 
 Run: `pnpm test -- src/shared/settings.test.ts src/SettingsApp.test.tsx src/components/Crosshair.test.tsx`
 
 Expected: FAIL；`sizePercent` 和新常量不存在，滑杆仍为 12–192 px，Crosshair 仍写入 `32px`。
 
-- [ ] **Step 3：写 Rust 版本 2、迁移和预检失败测试**
+- [x] **Step 3：写 Rust 版本 2、迁移和预检失败测试**
 
 在 `src-tauri/src/config.rs` 测试模块新增：
 
@@ -297,7 +297,7 @@ fn unsupported_settings_version_is_not_valid() {
 }
 ```
 
-- [ ] **Step 4：运行 Rust 测试并确认 RED**
+- [x] **Step 4：运行 Rust 测试并确认 RED**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml config::tests`
 
@@ -311,7 +311,7 @@ Run: `cargo test --manifest-path src-tauri/Cargo.toml state::tests`
 
 Expected: FAIL；版本 1 仍不能通过预检。
 
-- [ ] **Step 5：实现前端版本 2 协议与百分比滑杆**
+- [x] **Step 5：实现前端版本 2 协议与百分比滑杆**
 
 在 `src/shared/settings.ts` 使用：
 
@@ -377,7 +377,7 @@ height: var(--crosshair-size);
 
 在 `src/global.css` 的 `.overlay-root` 和 `src/SettingsApp.css` 的 `.preview-stage` 中加入 `container-type: size;`。
 
-- [ ] **Step 6：实现 Rust 版本 2、兼容结构与纯迁移函数**
+- [x] **Step 6：实现 Rust 版本 2、兼容结构与纯迁移函数**
 
 在 `src-tauri/src/config.rs` 定义：
 
@@ -473,7 +473,7 @@ pub fn resolved_logical_short_edge(
 }
 ```
 
-- [ ] **Step 7：实现配置版本分派和迁移后保存**
+- [x] **Step 7：实现配置版本分派和迁移后保存**
 
 在 `src-tauri/src/state.rs` 导入迁移函数、兼容结构、版本常量和显示器 helper，加入：
 
@@ -543,7 +543,7 @@ fn is_supported_settings_value(value: Value) -> bool {
 
 `is_valid_settings_store` 继续解析 `HashMap<String, Value>`，把 `settings` 值 `cloned().map(is_supported_settings_value).unwrap_or(true)` 作为结果。
 
-- [ ] **Step 8：运行协议和迁移回归并确认 GREEN**
+- [x] **Step 8：运行协议和迁移回归并确认 GREEN**
 
 Run: `pnpm test -- src/shared/settings.test.ts src/SettingsApp.test.tsx src/components/Crosshair.test.tsx`
 
@@ -557,7 +557,7 @@ Run: `pnpm build`
 
 Expected: exit code 0。
 
-- [ ] **Step 9：提交百分比协议与迁移**
+- [x] **Step 9：提交百分比协议与迁移**
 
 ```bash
 git add src/shared/settings.ts src/shared/settings.test.ts src/SettingsApp.tsx src/SettingsApp.test.tsx src/components/Crosshair.tsx src/components/Crosshair.css src/components/Crosshair.test.tsx src/global.css src/SettingsApp.css src-tauri/src/config.rs src-tauri/src/state.rs src-tauri/src/monitor.rs
@@ -578,7 +578,7 @@ git commit -m "功能：升级准星百分比尺寸配置"
 - Consumes: `MonitorGeometry`、`resolve_monitor`、`AppState.settings.target_monitor_id`。
 - Produces: `OverlayGeometry { position, physical_width, physical_height, logical_width, logical_height }`、`full_screen_overlay_geometry(&MonitorGeometry) -> Option<OverlayGeometry>`、`refresh_overlay_geometry(&AppHandle<R>) -> Result<(), String>`。
 
-- [ ] **Step 1：写全屏覆盖层几何失败测试**
+- [x] **Step 1：写全屏覆盖层几何失败测试**
 
 把 `src-tauri/src/monitor.rs` 的测试 helper 改为：
 
@@ -640,13 +640,13 @@ fn full_screen_overlay_preserves_portrait_dimensions() {
 }
 ```
 
-- [ ] **Step 2：运行几何测试并确认 RED**
+- [x] **Step 2：运行几何测试并确认 RED**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml monitor::tests`
 
 Expected: FAIL；`OverlayGeometry` 和 `full_screen_overlay_geometry` 未定义。
 
-- [ ] **Step 3：实现全屏几何纯函数**
+- [x] **Step 3：实现全屏几何纯函数**
 
 在 `src-tauri/src/monitor.rs` 定义：
 
@@ -680,7 +680,7 @@ pub fn full_screen_overlay_geometry(
 
 删除 `centered_overlay_position` 和 `OVERLAY_SIZE` 测试依赖。
 
-- [ ] **Step 4：创建隐藏窗口后应用完整屏幕几何**
+- [x] **Step 4：创建隐藏窗口后应用完整屏幕几何**
 
 在 `src-tauri/src/overlay.rs` 导入 `PhysicalSize` 和新几何函数，删除 `OVERLAY_SIZE`。把 `create_or_refresh_overlay` 改为：
 
@@ -762,7 +762,7 @@ if let Some(window) = app.get_webview_window(OVERLAY_LABEL) {
 
 保留函数后半段对 `resolved_monitor_id`、`using_fallback_monitor`、`error` 和运行时事件的更新。
 
-- [ ] **Step 5：切换完整几何刷新调用并确认 GREEN**
+- [x] **Step 5：切换完整几何刷新调用并确认 GREEN**
 
 在 `src-tauri/src/commands.rs` 的 `select_monitor` 中使用 `overlay::refresh_overlay_geometry(&app)?;`；在 `src-tauri/src/lib.rs` 的两秒轮询中使用 `overlay::refresh_overlay_geometry(&handle)` 并保留现有错误记录分支。
 
@@ -778,7 +778,7 @@ Run: `cargo test --manifest-path src-tauri/Cargo.toml`
 
 Expected: PASS。
 
-- [ ] **Step 6：提交全屏覆盖层**
+- [x] **Step 6：提交全屏覆盖层**
 
 ```bash
 git add src-tauri/src/monitor.rs src-tauri/src/overlay.rs src-tauri/src/commands.rs src-tauri/src/lib.rs
@@ -803,7 +803,7 @@ git commit -m "功能：覆盖层匹配目标屏幕尺寸"
 - Consumes: `sizePercent`、`strokePx`、`gapPx`、`status.resolvedMonitorId`、`MonitorInfo.width/height`。
 - Produces: `--fine-arm-length`、`crosshair--zero`、`aria-label="目标屏幕预览画布"`、`data-monitor-id`。
 
-- [ ] **Step 1：写细旗 0%、100% 和普通预设零值失败测试**
+- [x] **Step 1：写细旗 0%、100% 和普通预设零值失败测试**
 
 让 `src/components/Crosshair.test.tsx` 的 helper 接收覆盖值：
 
@@ -890,7 +890,7 @@ it("普通预设在 0% 时隐藏但 fine-diamond 仍保留中心", () => {
 });
 ```
 
-- [ ] **Step 2：写实际解析屏幕比例预览失败测试**
+- [x] **Step 2：写实际解析屏幕比例预览失败测试**
 
 在 `src/SettingsApp.test.tsx` 首个用例加入：
 
@@ -933,13 +933,13 @@ it("预览使用运行时实际解析出的回退屏幕比例", async () => {
 });
 ```
 
-- [ ] **Step 3：运行目标测试并确认 RED**
+- [x] **Step 3：运行目标测试并确认 RED**
 
 Run: `pnpm test -- src/components/Crosshair.test.tsx src/SettingsApp.test.tsx`
 
 Expected: FAIL；细旗进度变量、零值类、100cqw/100cqh 和预览画布未实现。
 
-- [ ] **Step 4：实现细旗线性进度和零值行为**
+- [x] **Step 4：实现细旗线性进度和零值行为**
 
 在 `src/components/Crosshair.tsx` 定义 `const FINE_DIAMOND_HALF_EXTENT_PX = 10;`，在 `CrosshairStyle` 增加 `"--fine-arm-length": string`，并在组件内计算：
 
@@ -1003,7 +1003,7 @@ className={`crosshair crosshair--${settings.preset} ${
 
 保留现有包含 `.crosshair--fine-diamond` 的四向向心 `clip-path` 分组。
 
-- [ ] **Step 5：实现目标屏幕比例内部预览画布**
+- [x] **Step 5：实现目标屏幕比例内部预览画布**
 
 在 `src/SettingsApp.tsx` 增加类型导入和预览样式类型：
 
@@ -1083,7 +1083,7 @@ const previewStyle: PreviewViewportStyle = {
 
 保留 `.preview-stage::after` 和 `.preview-grid`；确认 `src/global.css` 的 `.overlay-root` 仍包含 `container-type: size`，`src/OverlayApp.tsx` 仍直接在其中渲染 Crosshair。
 
-- [ ] **Step 6：运行前端回归并确认 GREEN**
+- [x] **Step 6：运行前端回归并确认 GREEN**
 
 Run: `pnpm test -- src/components/Crosshair.test.tsx src/SettingsApp.test.tsx`
 
@@ -1097,7 +1097,7 @@ Run: `pnpm build`
 
 Expected: exit code 0。
 
-- [ ] **Step 7：提交细旗与预览画布**
+- [x] **Step 7：提交细旗与预览画布**
 
 ```bash
 git add src/components/Crosshair.tsx src/components/Crosshair.css src/components/Crosshair.test.tsx src/SettingsApp.tsx src/SettingsApp.test.tsx src/SettingsApp.css src/global.css
