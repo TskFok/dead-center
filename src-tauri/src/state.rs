@@ -9,7 +9,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Manager, Runtime};
-use tauri_plugin_store::StoreExt;
+use tauri_plugin_store::{Store, StoreExt};
 
 use crate::config::{migrate_v1_settings, AppSettings, LegacyAppSettingsV1, SETTINGS_VERSION};
 use crate::monitor::{collect_monitors, resolved_logical_short_edge, MonitorInfo};
@@ -79,17 +79,10 @@ pub fn load_settings<R: Runtime>(app: &AppHandle<R>) -> Result<AppSettings, Stri
         .store("settings.json")
         .map_err(|error| error.to_string())?;
 
-    if let Some(value) = store.get("settings") {
-        if let Some((settings, migrated)) = decode_settings(app, value) {
-            if migrated {
-                store.set(
-                    "settings",
-                    serde_json::to_value(&settings).map_err(|error| error.to_string())?,
-                );
-                store.save().map_err(|error| error.to_string())?;
-            }
-            return Ok(settings);
-        }
+    if let Some(settings) = load_stored_settings(store.as_ref(), |target_monitor_id| {
+        legacy_short_edge(app, target_monitor_id)
+    })? {
+        return Ok(settings);
     }
 
     let settings = AppSettings::default();
@@ -158,11 +151,58 @@ fn legacy_short_edge<R: Runtime>(
     resolved_logical_short_edge(&monitors, target_monitor_id)
 }
 
-fn decode_settings<R: Runtime>(app: &AppHandle<R>, value: Value) -> Option<(AppSettings, bool)> {
+trait SettingsStore {
+    fn stored_settings(&self) -> Option<Value>;
+    fn replace_settings(&self, value: Value);
+    fn save(&self) -> Result<(), String>;
+}
+
+impl<R: Runtime> SettingsStore for Store<R> {
+    fn stored_settings(&self) -> Option<Value> {
+        self.get("settings")
+    }
+
+    fn replace_settings(&self, value: Value) {
+        self.set("settings", value);
+    }
+
+    fn save(&self) -> Result<(), String> {
+        Store::save(self).map_err(|error| error.to_string())
+    }
+}
+
+fn load_stored_settings<ResolveShortEdge>(
+    store: &impl SettingsStore,
+    resolve_short_edge: ResolveShortEdge,
+) -> Result<Option<AppSettings>, String>
+where
+    ResolveShortEdge: FnOnce(Option<&str>) -> Option<f64>,
+{
+    let Some(value) = store.stored_settings() else {
+        return Ok(None);
+    };
+    let Some((settings, migrated)) = decode_settings(value, resolve_short_edge) else {
+        return Ok(None);
+    };
+    if migrated {
+        let value = serde_json::to_value(&settings).map_err(|error| error.to_string())?;
+        store.replace_settings(value);
+        store.save()?;
+    }
+    Ok(Some(settings))
+}
+
+fn decode_settings<ResolveShortEdge>(
+    value: Value,
+    resolve_short_edge: ResolveShortEdge,
+) -> Option<(AppSettings, bool)>
+where
+    ResolveShortEdge: FnOnce(Option<&str>) -> Option<f64>,
+{
     match settings_version(&value)? {
         1 => {
             let legacy = serde_json::from_value::<LegacyAppSettingsV1>(value).ok()?;
-            let short_edge = legacy_short_edge(app, legacy.target_monitor_id.as_deref());
+            let short_edge = resolve_short_edge(legacy.target_monitor_id.as_deref());
             Some((migrate_v1_settings(legacy, short_edge), true))
         }
         version if version == u64::from(SETTINGS_VERSION) => {
@@ -212,8 +252,39 @@ fn current_session_type() -> SessionType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::monitor::MonitorGeometry;
+    use std::cell::{Cell, RefCell};
 
-    fn version_one_value() -> Value {
+    struct MemorySettingsStore {
+        settings: RefCell<Option<Value>>,
+        save_count: Cell<usize>,
+    }
+
+    impl MemorySettingsStore {
+        fn new(settings: Value) -> Self {
+            Self {
+                settings: RefCell::new(Some(settings)),
+                save_count: Cell::new(0),
+            }
+        }
+    }
+
+    impl SettingsStore for MemorySettingsStore {
+        fn stored_settings(&self) -> Option<Value> {
+            self.settings.borrow().clone()
+        }
+
+        fn replace_settings(&self, value: Value) {
+            self.settings.replace(Some(value));
+        }
+
+        fn save(&self) -> Result<(), String> {
+            self.save_count.set(self.save_count.get() + 1);
+            Ok(())
+        }
+    }
+
+    fn version_one_value(target_monitor_id: Option<&str>) -> Value {
         serde_json::json!({
             "version": 1,
             "visual": {
@@ -225,17 +296,65 @@ mod tests {
                 "strokePx": 3.0,
                 "gapPx": 8.0
             },
-            "targetMonitorId": null,
+            "targetMonitorId": target_monitor_id,
             "toggleShortcut": "Alt+Shift+X",
             "launchAtLogin": false,
             "showOnLaunch": true
         })
     }
 
+    fn monitor(id: &str, x: i32, width: u32, scale_factor: f64, primary: bool) -> MonitorGeometry {
+        MonitorGeometry {
+            id: id.into(),
+            name: id.into(),
+            x,
+            y: 0,
+            width,
+            height: 1440,
+            scale_factor,
+            primary,
+        }
+    }
+
+    #[test]
+    fn loading_v1_uses_target_or_fallback_short_edge_and_persists_v2() {
+        let monitors = vec![
+            monitor("primary", 0, 1920, 1.0, true),
+            monitor("secondary", 1920, 2560, 2.0, false),
+        ];
+
+        for (target_monitor_id, expected_short_edge) in [("secondary", 720.0), ("missing", 1440.0)]
+        {
+            let store = MemorySettingsStore::new(version_one_value(Some(target_monitor_id)));
+            let settings = load_stored_settings(&store, |target| {
+                resolved_logical_short_edge(&monitors, target)
+            })
+            .unwrap()
+            .unwrap();
+
+            assert_eq!(
+                settings.visual.size_percent,
+                32.0 / expected_short_edge * 100.0
+            );
+            assert_eq!(store.save_count.get(), 1);
+            let persisted = store
+                .settings
+                .borrow()
+                .clone()
+                .expect("版本 1 迁移后必须立即持久化");
+            assert_eq!(persisted["version"], 2);
+            assert_eq!(
+                persisted["visual"]["sizePercent"],
+                32.0 / expected_short_edge * 100.0
+            );
+            assert!(persisted["visual"].get("sizePx").is_none());
+        }
+    }
+
     #[test]
     fn valid_store_accepts_versions_one_and_two() {
         for settings in [
-            version_one_value(),
+            version_one_value(None),
             serde_json::to_value(AppSettings::default()).unwrap(),
         ] {
             let bytes = serde_json::to_vec(&serde_json::json!({

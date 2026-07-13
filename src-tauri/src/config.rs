@@ -202,6 +202,28 @@ mod tests {
     }
 
     #[test]
+    fn validation_clamps_opacity_stroke_and_gap_ranges() {
+        let mut visual = AppSettings::default().visual;
+        visual.opacity = 0.0;
+        visual.stroke_px = 0.0;
+        visual.gap_px = -1.0;
+        visual.normalize();
+        assert_eq!(
+            (visual.opacity, visual.stroke_px, visual.gap_px),
+            (0.1, 1.0, 0.0)
+        );
+
+        visual.opacity = 2.0;
+        visual.stroke_px = 9.0;
+        visual.gap_px = 30.0;
+        visual.normalize();
+        assert_eq!(
+            (visual.opacity, visual.stroke_px, visual.gap_px),
+            (1.0, 8.0, 24.0)
+        );
+    }
+
+    #[test]
     fn migrates_pixels_against_logical_short_edge_and_preserves_fields() {
         let mut legacy = legacy_defaults();
         legacy.visual.preset = CrosshairPreset::FineDiamond;
