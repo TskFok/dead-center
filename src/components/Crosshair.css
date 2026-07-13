@@ -86,7 +86,7 @@
 .crosshair--solid-diamond {
   --flag-clearance: min(
     var(--flag-clearance-cap),
-    max(calc(var(--crosshair-gap) / 2), var(--diamond-clearance))
+    calc(var(--diamond-clearance) + var(--crosshair-gap) / 2)
   );
   --diamond-stroke: min(
     var(--crosshair-stroke),

@@ -4,7 +4,11 @@ import { readFileSync } from "node:fs";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_SETTINGS, type CrosshairPreset } from "../shared/settings";
+import {
+  DEFAULT_SETTINGS,
+  type CrosshairPreset,
+  type DiamondCrosshairPreset,
+} from "../shared/settings";
 import { Crosshair } from "./Crosshair";
 
 const crosshairCss = readFileSync("src/components/Crosshair.css", "utf8");
@@ -26,8 +30,6 @@ const DIAMOND_CASES = [
   ["solid-diamond", "crosshair__diamond--solid"],
 ] as const;
 
-type LongFlagPreset = "long-diamond" | "solid-diamond";
-
 interface FlagGeometry {
   insetPercent: number;
   clearanceCapPercent: number;
@@ -40,7 +42,7 @@ interface DiamondSize {
   maximumPx: number;
 }
 
-const readPresetBlock = (preset: LongFlagPreset) => {
+const readPresetBlock = (preset: DiamondCrosshairPreset) => {
   const matchingBlocks = [
     ...crosshairCss.matchAll(
       new RegExp(`\\.crosshair--${preset}\\s*\\{([\\s\\S]*?)\\}`, "g"),
@@ -53,7 +55,7 @@ const readPresetBlock = (preset: LongFlagPreset) => {
   return block;
 };
 
-const readFlagGeometry = (preset: LongFlagPreset): FlagGeometry => {
+const readFlagGeometry = (preset: DiamondCrosshairPreset): FlagGeometry => {
   const block = readPresetBlock(preset);
 
   const readPercent = (variable: string) => {
@@ -73,7 +75,7 @@ const readFlagGeometry = (preset: LongFlagPreset): FlagGeometry => {
   };
 };
 
-const readDiamondSize = (preset: LongFlagPreset): DiamondSize => {
+const readDiamondSize = (preset: DiamondCrosshairPreset): DiamondSize => {
   const size = readPresetBlock(preset).match(
     /--diamond-size:\s*clamp\(\s*([\d.]+)px,\s*([\d.]+)%,\s*([\d.]+)px\s*\)/,
   );
@@ -95,10 +97,7 @@ const flagClearancePx = (
 ) =>
   Math.min(
     (sizePx * geometry.clearanceCapPercent) / 100,
-    Math.max(
-      gapPx / 2,
-      (sizePx * geometry.minimumClearancePercent) / 100,
-    ),
+    (sizePx * geometry.minimumClearancePercent) / 100 + gapPx / 2,
   );
 
 const flagArmLengthPx = (
@@ -165,6 +164,18 @@ describe("Crosshair", () => {
       expect(container.querySelector(".crosshair__dot")).toBeInTheDocument();
     },
   );
+
+  it.each(DIAMOND_CASES)("%s 在大尺寸下仍响应中心缺口", (preset) => {
+    const geometry = readFlagGeometry(preset);
+    const sizePx = 96;
+
+    expect(flagClearancePx(geometry, sizePx, 0)).toBeLessThan(
+      flagClearancePx(geometry, sizePx, 8),
+    );
+    expect(flagClearancePx(geometry, sizePx, 8)).toBeLessThan(
+      flagClearancePx(geometry, sizePx, 24),
+    );
+  });
 
   it("solid-diamond 在常规与封顶间距下严格保留更长旗臂", () => {
     const long = readFlagGeometry("long-diamond");
