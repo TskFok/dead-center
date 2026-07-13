@@ -7,6 +7,10 @@
   filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.95));
 }
 
+.crosshair--zero:not(.crosshair--fine-diamond) {
+  visibility: hidden;
+}
+
 .crosshair__dot {
   position: absolute;
   left: 50%;
@@ -97,11 +101,13 @@
 }
 
 .crosshair--fine-diamond {
+  width: 100cqw;
+  height: 100cqh;
   --flag-inset: 0%;
   --flag-thickness: min(max(var(--crosshair-stroke), 1px), 12%);
   --flag-clearance-cap: 24%;
   --diamond-clearance: 12%;
-  --diamond-size: clamp(4px, 18%, 14px);
+  --diamond-size: 14px;
   --diamond-stroke-cap: 1px;
 }
 
@@ -174,6 +180,16 @@
     0px,
     calc(50% - var(--flag-clearance) - var(--flag-inset))
   );
+}
+
+.crosshair--fine-diamond
+  :is(.crosshair__flag--left, .crosshair__flag--right) {
+  width: var(--fine-arm-length);
+}
+
+.crosshair--fine-diamond
+  :is(.crosshair__flag--top, .crosshair__flag--bottom) {
+  height: var(--fine-arm-length);
 }
 
 .crosshair__flag--top {

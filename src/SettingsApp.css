@@ -227,12 +227,23 @@
   height: 322px;
   margin-top: 18px;
   position: relative;
-  container-type: size;
   display: grid;
   place-items: center;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 14px;
+  background: #070a0f;
+  container-type: size;
+}
+
+.preview-viewport {
+  position: relative;
+  width: min(100cqw, var(--preview-width-by-height));
+  height: min(100cqh, var(--preview-height-by-width));
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  container-type: size;
   background:
     radial-gradient(circle at center, rgba(48, 65, 87, 0.75), transparent 37%),
     linear-gradient(145deg, #111824, #070a0f);

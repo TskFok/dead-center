@@ -68,6 +68,38 @@ describe("SettingsApp", () => {
     expect(screen.getByLabelText("整体尺寸")).toHaveAttribute("max", "100");
     expect(screen.getByText("3%")).toBeVisible();
     expect(screen.getByText("准星已显示")).toBeVisible();
+    const viewport = screen.getByLabelText("目标屏幕预览画布");
+    expect(viewport).toHaveAttribute("data-monitor-id", "primary");
+    expect(viewport).toHaveStyle({ aspectRatio: "2560 / 1440" });
+  });
+
+  it("预览使用运行时实际解析出的回退屏幕比例", async () => {
+    const fallbackSnapshot: AppSnapshot = {
+      ...snapshot,
+      status: {
+        ...snapshot.status,
+        resolvedMonitorId: "fallback",
+        usingFallbackMonitor: true,
+      },
+      monitors: [
+        ...snapshot.monitors,
+        {
+          id: "fallback",
+          name: "回退屏幕",
+          isPrimary: false,
+          width: 1920,
+          height: 1200,
+          scaleFactor: 1,
+        },
+      ],
+    };
+    const bridge = makeBridge();
+    vi.mocked(bridge.getSnapshot).mockResolvedValue(fallbackSnapshot);
+    render(<SettingsApp bridge={bridge} />);
+
+    const viewport = await screen.findByLabelText("目标屏幕预览画布");
+    expect(viewport).toHaveAttribute("data-monitor-id", "fallback");
+    expect(viewport).toHaveStyle({ aspectRatio: "1920 / 1200" });
   });
 
   it("按百分比调整整体尺寸并防抖保存", async () => {

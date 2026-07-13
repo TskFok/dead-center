@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 
 import { Crosshair } from "./components/Crosshair";
 import type { AppBridge } from "./shared/bridge";
@@ -29,6 +30,11 @@ const PRESETS: Array<{
 interface SettingsAppProps {
   bridge: AppBridge;
 }
+
+type PreviewViewportStyle = CSSProperties & {
+  "--preview-width-by-height": string;
+  "--preview-height-by-width": string;
+};
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -96,6 +102,20 @@ export function SettingsApp({ bridge }: SettingsAppProps) {
   }
 
   const statusError = error ?? snapshot.status.error;
+  const previewMonitor =
+    snapshot.monitors.find(
+      (monitor) => monitor.id === snapshot.status.resolvedMonitorId,
+    ) ??
+    snapshot.monitors.find((monitor) => monitor.isPrimary) ??
+    snapshot.monitors[0];
+  const previewWidth = previewMonitor?.width ?? 16;
+  const previewHeight = previewMonitor?.height ?? 9;
+  const previewRatio = previewWidth / previewHeight;
+  const previewStyle: PreviewViewportStyle = {
+    aspectRatio: `${previewWidth} / ${previewHeight}`,
+    "--preview-width-by-height": `${previewRatio * 100}cqh`,
+    "--preview-height-by-width": `${(1 / previewRatio) * 100}cqw`,
+  };
 
   return (
     <main className="settings-shell">
@@ -141,8 +161,15 @@ export function SettingsApp({ bridge }: SettingsAppProps) {
             <span className="live-badge">即时生效</span>
           </div>
           <div className="preview-stage">
-            <div className="preview-grid" />
-            <Crosshair settings={visual} />
+            <div
+              aria-label="目标屏幕预览画布"
+              className="preview-viewport"
+              data-monitor-id={previewMonitor?.id ?? "unknown"}
+              style={previewStyle}
+            >
+              <div className="preview-grid" />
+              <Crosshair settings={visual} />
+            </div>
           </div>
           <div className="preset-list">
             {PRESETS.map((preset) => (

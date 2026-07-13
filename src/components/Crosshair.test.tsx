@@ -13,11 +13,15 @@ import { Crosshair } from "./Crosshair";
 
 const crosshairCss = readFileSync("src/components/Crosshair.css", "utf8");
 
-const renderPreset = (preset: CrosshairPreset) =>
+const renderPreset = (
+  preset: CrosshairPreset,
+  visual: Partial<typeof DEFAULT_SETTINGS.visual> = {},
+) =>
   render(
     <Crosshair
       settings={{
         ...DEFAULT_SETTINGS.visual,
+        ...visual,
         preset,
       }}
     />,
@@ -157,8 +161,70 @@ describe("Crosshair", () => {
     },
   );
 
-  it("fine-diamond 从容器边缘向中心延伸", () => {
-    expect(readFlagGeometry("fine-diamond").insetPercent).toBe(0);
+  it("fine-diamond 在 0% 时铺满画布并保留线宽旗头", () => {
+    renderPreset("fine-diamond", {
+      sizePercent: 0,
+      strokePx: 3,
+      gapPx: 8,
+    });
+    const crosshair = screen.getByLabelText("细旗空心菱形");
+    expect(crosshair).toHaveClass("crosshair--zero");
+    expect(crosshair.style.getPropertyValue("--fine-arm-length")).toBe(
+      "max(3px, calc(0% - 0px))",
+    );
+    expect(readPresetBlock("fine-diamond")).toContain("width: 100cqw");
+    expect(readPresetBlock("fine-diamond")).toContain("height: 100cqh");
+  });
+
+  it("fine-diamond 在 100% 时停在菱形和缺口外缘", () => {
+    renderPreset("fine-diamond", {
+      sizePercent: 100,
+      strokePx: 3,
+      gapPx: 8,
+    });
+    expect(
+      screen
+        .getByLabelText("细旗空心菱形")
+        .style.getPropertyValue("--fine-arm-length"),
+    ).toBe("max(3px, calc(50% - 14px))");
+  });
+
+  it("fine-diamond 在 100% 时响应中心缺口", () => {
+    const noGap = renderPreset("fine-diamond", {
+      sizePercent: 100,
+      gapPx: 0,
+    });
+    expect(
+      screen
+        .getByLabelText("细旗空心菱形")
+        .style.getPropertyValue("--fine-arm-length"),
+    ).toContain("calc(50% - 10px)");
+    noGap.unmount();
+
+    renderPreset("fine-diamond", {
+      sizePercent: 100,
+      gapPx: 24,
+    });
+    expect(
+      screen
+        .getByLabelText("细旗空心菱形")
+        .style.getPropertyValue("--fine-arm-length"),
+    ).toContain("calc(50% - 22px)");
+  });
+
+  it("普通预设在 0% 时隐藏但 fine-diamond 仍保留中心", () => {
+    const ordinary = renderPreset("classic-cross", { sizePercent: 0 });
+    expect(screen.getByLabelText("缺口十字")).toHaveClass("crosshair--zero");
+    expect(crosshairCss).toContain(
+      ".crosshair--zero:not(.crosshair--fine-diamond)",
+    );
+    ordinary.unmount();
+
+    renderPreset("fine-diamond", { sizePercent: 0 });
+    expect(document.querySelector(".crosshair__diamond")).toBeInTheDocument();
+  });
+
+  it("fine-diamond 的四向旗臂尖头朝向中心", () => {
 
     const inwardFineDiamondRules = [
       [

@@ -17,12 +17,15 @@ const PRESET_LABELS = {
   "solid-diamond": "长旗实心菱形",
 } satisfies Record<CrosshairPreset, string>;
 
+const FINE_DIAMOND_HALF_EXTENT_PX = 10;
+
 type CrosshairStyle = CSSProperties & {
   "--crosshair-size": string;
   "--crosshair-primary": string;
   "--crosshair-accent": string;
   "--crosshair-stroke": string;
   "--crosshair-gap": string;
+  "--fine-arm-length": string;
 };
 
 interface CrosshairProps {
@@ -30,6 +33,10 @@ interface CrosshairProps {
 }
 
 export function Crosshair({ settings }: CrosshairProps) {
+  const progress = settings.sizePercent / 100;
+  const fineCenterClearancePx =
+    FINE_DIAMOND_HALF_EXTENT_PX + settings.gapPx / 2;
+  const scaledFineClearancePx = progress * fineCenterClearancePx;
   const style: CrosshairStyle = {
     opacity: settings.opacity,
     "--crosshair-size": `${settings.sizePercent}cqmin`,
@@ -37,6 +44,7 @@ export function Crosshair({ settings }: CrosshairProps) {
     "--crosshair-accent": settings.accentColor,
     "--crosshair-stroke": `${settings.strokePx}px`,
     "--crosshair-gap": `${settings.gapPx}px`,
+    "--fine-arm-length": `max(${settings.strokePx}px, calc(${settings.sizePercent / 2}% - ${scaledFineClearancePx}px))`,
   };
   const diamondPreset = isDiamondPreset(settings.preset);
   const diamondClass =
@@ -47,7 +55,9 @@ export function Crosshair({ settings }: CrosshairProps) {
   return (
     <div
       aria-label={PRESET_LABELS[settings.preset]}
-      className={`crosshair crosshair--${settings.preset}`}
+      className={`crosshair crosshair--${settings.preset} ${
+        settings.sizePercent === 0 ? "crosshair--zero" : ""
+      }`}
       data-preset={settings.preset}
       style={style}
     >
