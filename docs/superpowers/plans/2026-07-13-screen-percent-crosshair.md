@@ -1116,7 +1116,7 @@ git commit -m "样式：细旗从屏幕四边向心延伸"
 - Consumes: 最终版本 2 设置协议、全屏覆盖层和细旗几何。
 - Produces: 用户文档、自动化验证记录和桌面视觉验证状态。
 
-- [ ] **Step 1：更新 README**
+- [x] **Step 1：更新 README**
 
 把功能列表中的尺寸说明写成：
 
@@ -1131,13 +1131,13 @@ git commit -m "样式：细旗从屏幕四边向心延伸"
 2. 在设置页选择样式和参数；“整体尺寸”以目标屏幕短边百分比显示，修改会实时生效并自动保存。
 ```
 
-- [ ] **Step 2：检查旧字段和旧窗口接口**
+- [x] **Step 2：检查旧字段和旧窗口接口**
 
 Run: `rg -n "sizePx|size_px|CROSSHAIR_SIZE_(MIN|MAX)|OVERLAY_SIZE|refresh_overlay_position" src src-tauri README.md`
 
 Expected: `sizePx`／`size_px` 仅出现在版本 1 兼容结构、迁移 fixture 和迁移测试中；旧常量与旧窗口刷新函数无输出。
 
-- [ ] **Step 3：运行格式与全量自动化验证**
+- [x] **Step 3：运行格式与全量自动化验证**
 
 Run: `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`
 
@@ -1161,6 +1161,8 @@ Expected: 无输出，退出码为 0。
 
 - [ ] **Step 4：运行桌面应用进行定向视觉验证**
 
+状态：自动化验证完成，桌面视觉验证需在有图形会话的环境执行。
+
 Run: `pnpm tauri dev`
 
 Expected checklist:
@@ -1175,7 +1177,7 @@ Expected checklist:
 
 完成后停止开发进程。若没有可用图形会话，在 `progress.md` 记录“自动化验证完成，桌面视觉验证需在有图形会话的环境执行”，不得声称已完成视觉验证。
 
-- [ ] **Step 5：更新勾选并提交文档**
+- [x] **Step 5：更新勾选并提交文档**
 
 在本计划勾选已完成步骤，并在 `progress.md` 记录测试结果和视觉验证状态，然后执行：
 
@@ -1184,7 +1186,9 @@ git add README.md docs/superpowers/plans/2026-07-13-screen-percent-crosshair.md
 git commit -m "文档：说明准星百分比尺寸"
 ```
 
-- [ ] **Step 6：最终检查提交范围**
+- [x] **Step 6：最终检查提交范围**
+
+结果：`git log -5 --oneline` 包含 README 说明、细旗向心样式和覆盖层安全修复；由于实施期间增加了审查补强提交，百分比配置迁移与全屏覆盖层主提交位于最近 10 条记录中，相关提交信息均为简体中文。
 
 Run: `git status --short --branch`
 
