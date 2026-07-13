@@ -85,3 +85,60 @@
 ## 预提交校正
 
 - 首次执行 `git diff --cached --check` 时因本报告末尾多余空行退出 2；移除多余空行后重新暂存并复检。
+
+---
+
+## 最终复审追加修复（第二轮）
+
+### 范围与基线
+
+- 本轮基线提交：`39c3c14e55a7dab36383f288306c3ae3d6ad5cf8`。
+- 仍在当前 `main` 分支修改；未执行真实 `git push`、`git tag` 或发布命令。
+
+### Critical：Windows pnpm 入口按类型安全分流
+
+- 根因：上一轮实现只要是 Windows 就无条件执行 `nodePath + npmExecPath`；这会把原生 `.exe/.com` 错当作 JavaScript，并允许 `.cmd/.bat` 或未知类型进入 Node。
+- RED：`pnpm vitest run scripts/release.test.mjs -t "Windows|非 Windows"`，退出 1；46 项中执行 7 项，4 失败、3 通过、39 跳过。`pnpm.exe` 被错误交给 Node，`.cmd`、`.bat`、`.ps1` 均未拒绝；现有 `.cjs`、缺入口和非 Windows 基线通过。
+- 修复：使用 `path.win32.extname(npmExecPath).toLowerCase()` 判断入口；`.js/.cjs/.mjs` 由注入 Node 执行，`.exe/.com` 直接作为 command，所有调用继续使用参数数组；批处理和其他扩展名明确中文拒绝。
+- GREEN：同一命令退出 0；7 通过、39 跳过。
+- 补充术语 RED：`pnpm vitest run scripts/release.test.mjs -t "缺少 npm_execpath"` 首次退出 1（1 失败、53 跳过），因为缺入口错误仍误称“JavaScript 入口”。修正为通用“pnpm 入口”后同命令退出 0（1 通过、53 跳过）。
+
+### Important：完整保护 Tag 冲突查询顺序和拒绝副作用
+
+- 根因：严格事件序列过滤了 `git tag --list` 与 `git ls-remote --tags`，harness 也不能注入本地或远端 Tag 查询结果。
+- RED：`pnpm vitest run scripts/release.test.mjs -t "目标 Tag 已存在|严格保护普通发布"`，退出 1；48 项中 3 失败、45 跳过。完整序列缺少两项查询，本地/远端冲突用例均未拒绝。
+- 修复：统一 events 序列纳入 `git tag --list v0.1.1` 与 `git ls-remote --tags origin refs/tags/v0.1.1`，并严格放在 `pnpm test` 与任何 write 之前；harness 支持分别注入本地和远端 Tag。
+- GREEN：同一命令退出 0；3 通过、45 跳过。两类冲突均断言无 pnpm/Cargo、无 write、无 commit、无 Tag 创建及任何 push。
+
+### Minor：JSON 根值领域错误
+
+- 根因：合法 JSON 的 `null` 根值泄露 `.version` TypeError；数组和字符串误报“缺少字符串 version”。
+- RED：`pnpm vitest run scripts/release.test.mjs -t "JSON 根值"`，退出 1；54 项中 6 失败、48 跳过。`package.json` 与 `src-tauri/tauri.conf.json` 的 null、数组、字符串均未给出根值领域错误。
+- 修复：解析成功后显式拒绝 `null`、数组及所有非对象根值，错误包含对应清单路径。
+- GREEN：`pnpm vitest run scripts/release.test.mjs -t "JSON 根值|JSON 损坏"` 退出 0；8 通过、46 跳过，同时验证原有 JSON 语法错误 path 与 `cause` 行为不退化。
+
+### Minor：`--current` 直接保护零写入
+
+- 修复：现有 current 测试直接读取统一 events，断言不存在任何 `write`，不再只比较最终文件内容。
+- Mutation RED：测试先行后，临时让 current 写回原内容；`pnpm vitest run scripts/release.test.mjs -t "current 不写版本"` 退出 1，1 失败、53 跳过。虽然最终内容相同，新断言准确捕获 write 事件。
+- 恢复 GREEN：撤销临时 mutation 后同一命令退出 0，1 通过、53 跳过；最终生产代码未增加写入。
+
+### 第二轮完整验证
+
+| 命令 | 数量/关键输出 | 退出状态 |
+| --- | --- | --- |
+| `pnpm vitest run scripts/release.test.mjs` | 1 个测试文件；54/54 通过 | 0 |
+| `pnpm test` | 4 个测试文件；64/64 通过 | 0 |
+| `pnpm build` | `tsc && vite build`；39 个模块转换；构建完成 | 0 |
+| `cargo test --manifest-path src-tauri/Cargo.toml` | lib 8/8 通过；main/doc tests 0 失败 | 0 |
+| `git diff --check` | 无输出 | 0 |
+| `node --check scripts/release-core.mjs` | 无输出 | 0 |
+| `node --check scripts/release.mjs` | 无输出 | 0 |
+
+### 第二轮自审
+
+- Windows 分流仅基于受控入口扩展名，大小写统一；JS 与原生可执行入口均保持 command/args 数组，无 shell 字符串拼接。
+- Tag 冲突查询在普通发布完整安全序列中先于本地检查和文件写入，两类冲突拒绝均无发布副作用。
+- JSON 根值验证位于语法解析之后，不改变 SyntaxError 的路径文本和 `cause`。
+- current 的临时 mutation 已撤销，最终 diff 中只有 events 零写入断言，没有生产写入变化。
+- 未修改 SQL，也未执行真实 push、Tag 或发布。

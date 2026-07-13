@@ -95,9 +95,18 @@ export function resolvePnpmCommand(
 ) {
   if (platform !== "win32") return { command: "pnpm", args };
   if (!npmExecPath) {
-    throw new Error("Windows 下无法定位 pnpm 的 JavaScript 入口：缺少 npm_execpath");
+    throw new Error("Windows 下无法定位 pnpm 入口：缺少 npm_execpath");
   }
-  return { command: nodePath, args: [npmExecPath, ...args] };
+  const extension = path.win32.extname(npmExecPath).toLowerCase();
+  if ([".js", ".cjs", ".mjs"].includes(extension)) {
+    return { command: nodePath, args: [npmExecPath, ...args] };
+  }
+  if ([".exe", ".com"].includes(extension)) {
+    return { command: npmExecPath, args };
+  }
+  throw new Error(
+    `Windows 下不能安全执行 pnpm 入口 ${npmExecPath}：仅支持 .js/.cjs/.mjs 或 .exe/.com`,
+  );
 }
 
 function runPnpm(cwd, execute, args, runtime) {

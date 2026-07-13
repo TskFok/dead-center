@@ -55,6 +55,9 @@ function jsonVersion(content, path) {
       { cause: error },
     );
   }
+  if (parsed === null || Array.isArray(parsed) || typeof parsed !== "object") {
+    throw new Error(`${path} JSON 根值必须是对象`);
+  }
   const value = parsed.version;
   if (typeof value !== "string") throw new Error(`${path} 缺少字符串 version`);
   parseVersion(value);

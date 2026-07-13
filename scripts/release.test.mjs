@@ -94,6 +94,19 @@ describe("版本清单", () => {
     }
   });
 
+  it.each([
+    ["packageJson", "package.json", "null"],
+    ["packageJson", "package.json", "[]"],
+    ["packageJson", "package.json", '"dead-center"'],
+    ["tauriConfig", "src-tauri/tauri.conf.json", "null"],
+    ["tauriConfig", "src-tauri/tauri.conf.json", "[]"],
+    ["tauriConfig", "src-tauri/tauri.conf.json", '"Dead Center"'],
+  ])("%s（%s）JSON 根值 %s 不是对象时报告领域错误", (key, filePath, content) => {
+    expect(() => getConsistentVersion({ ...manifests, [key]: content })).toThrow(
+      `${filePath} JSON 根值必须是对象`,
+    );
+  });
+
   it("只更新三个清单的版本字段", () => {
     const updated = updateVersionContents(manifests, "0.1.1");
     expect(updated.packageJson).toBe(manifests.packageJson.replace("0.1.0", "0.1.1"));
@@ -120,6 +133,8 @@ function releaseHarness(
   {
     branch = "main",
     failOn,
+    localTag = "",
+    remoteTag = "",
     runtime,
     state = {},
     status = "",
@@ -159,8 +174,8 @@ function releaseHarness(
       syncResultIndex += 1;
       return result;
     }
-    if (key === "git tag --list v0.1.1") return "";
-    if (key === "git ls-remote --tags origin refs/tags/v0.1.1") return "";
+    if (key === "git tag --list v0.1.1") return localTag;
+    if (key === "git ls-remote --tags origin refs/tags/v0.1.1") return remoteTag;
     if (command === "cargo" && commandArgs[0] === "metadata") {
       files.set(
         "/repo/src-tauri/Cargo.lock",
@@ -241,6 +256,46 @@ describe("发布编排", () => {
     expect(calls.some(([command]) => command === "pnpm")).toBe(false);
   });
 
+  it("Windows 直接执行 pnpm.exe 并保留参数数组", () => {
+    const runtime = {
+      platform: "win32",
+      nodePath: "C:\\Program Files\\nodejs\\node.exe",
+      npmExecPath: "C:\\corepack\\pnpm.exe",
+    };
+    const { calls } = releaseHarness([], { runtime });
+
+    expect(calls).toContainEqual([runtime.npmExecPath, "test"]);
+    expect(calls).toContainEqual([runtime.npmExecPath, "build"]);
+    expect(calls.some(([command]) => command === runtime.nodePath)).toBe(false);
+  });
+
+  it.each(["C:\\corepack\\pnpm.cmd", "C:\\corepack\\pnpm.bat"])(
+    "Windows 拒绝批处理 pnpm 入口 %s",
+    (npmExecPath) => {
+      expect(() =>
+        releaseHarness([], {
+          runtime: {
+            platform: "win32",
+            nodePath: "C:\\Program Files\\nodejs\\node.exe",
+            npmExecPath,
+          },
+        }),
+      ).toThrow("不能安全执行");
+    },
+  );
+
+  it("Windows 拒绝未知类型的 pnpm 入口", () => {
+    expect(() =>
+      releaseHarness([], {
+        runtime: {
+          platform: "win32",
+          nodePath: "C:\\Program Files\\nodejs\\node.exe",
+          npmExecPath: "C:\\corepack\\pnpm.ps1",
+        },
+      }),
+    ).toThrow("不能安全执行");
+  });
+
   it("Windows 缺少 npm_execpath 时给出明确错误", () => {
     expect(() =>
       releaseHarness([], {
@@ -250,7 +305,7 @@ describe("发布编排", () => {
           npmExecPath: "",
         },
       }),
-    ).toThrow("npm_execpath");
+    ).toThrow("无法定位 pnpm 入口：缺少 npm_execpath");
   });
 
   it("非 Windows 保留直接 pnpm 参数数组调用", () => {
@@ -328,6 +383,30 @@ describe("发布编排", () => {
     expect(calls).toContainEqual(["git", "push", "origin", "refs/tags/v0.1.1"]);
   });
 
+  it.each([
+    ["本地", { localTag: "v0.1.1" }],
+    ["远端", { remoteTag: "0123456789abcdef\trefs/tags/v0.1.1" }],
+  ])("目标 Tag 已存在于%s时拒绝且无发布副作用", (_location, options) => {
+    const state = {};
+
+    expect(() => releaseHarness([], { ...options, state })).toThrow(
+      "标签 v0.1.1 已存在",
+    );
+    expect(
+      state.calls.some(([command]) => command === "pnpm" || command === "cargo"),
+    ).toBe(false);
+    expect(state.events.some(([type]) => type === "write")).toBe(false);
+    expect(
+      state.calls.some(
+        ([command, subcommand, ...commandArgs]) =>
+          command === "git" &&
+          (subcommand === "commit" ||
+            (subcommand === "tag" && commandArgs.includes("-a")) ||
+            subcommand === "push"),
+      ),
+    ).toBe(false);
+  });
+
   it("严格保护普通发布的安全执行顺序", () => {
     const { events } = releaseHarness([]);
     const relevantEvents = events.filter(
@@ -335,7 +414,8 @@ describe("发布编排", () => {
         type === "write" ||
         (command === "git" &&
           (["status", "rev-list", "add", "commit", "push"].includes(subcommand) ||
-            (subcommand === "tag" && option === "-a"))) ||
+            (subcommand === "tag" && ["--list", "-a"].includes(option)) ||
+            (subcommand === "ls-remote" && option === "--tags"))) ||
         command === "pnpm" ||
         command === "cargo",
     );
@@ -349,6 +429,15 @@ describe("发布编排", () => {
         "--left-right",
         "--count",
         "HEAD...origin/main",
+      ],
+      ["command", "git", "tag", "--list", "v0.1.1"],
+      [
+        "command",
+        "git",
+        "ls-remote",
+        "--tags",
+        "origin",
+        "refs/tags/v0.1.1",
       ],
       ["command", "pnpm", "test"],
       ["command", "pnpm", "build"],
@@ -391,9 +480,10 @@ describe("发布编排", () => {
   });
 
   it("current 不写版本或提交并强推当前标签", () => {
-    const { calls, files, result } = releaseHarness(["--current"]);
+    const { calls, events, files, result } = releaseHarness(["--current"]);
     expect(result).toEqual({ mode: "current", version: "0.1.0" });
     expect(files.get("/repo/package.json")).toBe(manifests.packageJson);
+    expect(events.some(([type]) => type === "write")).toBe(false);
     expect(calls.some((call) => call.includes("commit"))).toBe(false);
     expect(calls).toContainEqual([
       "git",
