@@ -95,7 +95,7 @@
 }
 
 .crosshair--fine-diamond {
-  --flag-inset: 22%;
+  --flag-inset: 0%;
   --flag-thickness: min(max(var(--crosshair-stroke), 1px), 12%);
   --flag-clearance-cap: 24%;
   --diamond-clearance: 12%;
@@ -182,42 +182,54 @@
   bottom: var(--flag-inset);
 }
 
-:is(.crosshair--fine-diamond, .crosshair--long-diamond)
-  .crosshair__flag--left {
+.crosshair--long-diamond .crosshair__flag--left {
   clip-path: polygon(0 50%, 18% 0, 100% 0, 100% 100%, 18% 100%);
 }
 
-:is(.crosshair--fine-diamond, .crosshair--long-diamond)
-  .crosshair__flag--right {
+.crosshair--long-diamond .crosshair__flag--right {
   clip-path: polygon(0 0, 82% 0, 100% 50%, 82% 100%, 0 100%);
 }
 
-:is(.crosshair--fine-diamond, .crosshair--long-diamond)
-  .crosshair__flag--top {
+.crosshair--long-diamond .crosshair__flag--top {
   clip-path: polygon(50% 0, 100% 18%, 100% 100%, 0 100%, 0 18%);
 }
 
-:is(.crosshair--fine-diamond, .crosshair--long-diamond)
-  .crosshair__flag--bottom {
+.crosshair--long-diamond .crosshair__flag--bottom {
   clip-path: polygon(0 0, 100% 0, 100% 82%, 50% 100%, 0 82%);
 }
 
-:is(.crosshair--inward-diamond, .crosshair--solid-diamond)
+:is(
+  .crosshair--fine-diamond,
+  .crosshair--inward-diamond,
+  .crosshair--solid-diamond
+)
   .crosshair__flag--left {
   clip-path: polygon(0 0, 82% 0, 100% 50%, 82% 100%, 0 100%);
 }
 
-:is(.crosshair--inward-diamond, .crosshair--solid-diamond)
+:is(
+  .crosshair--fine-diamond,
+  .crosshair--inward-diamond,
+  .crosshair--solid-diamond
+)
   .crosshair__flag--right {
   clip-path: polygon(18% 0, 100% 0, 100% 100%, 18% 100%, 0 50%);
 }
 
-:is(.crosshair--inward-diamond, .crosshair--solid-diamond)
+:is(
+  .crosshair--fine-diamond,
+  .crosshair--inward-diamond,
+  .crosshair--solid-diamond
+)
   .crosshair__flag--top {
   clip-path: polygon(0 0, 100% 0, 100% 82%, 50% 100%, 0 82%);
 }
 
-:is(.crosshair--inward-diamond, .crosshair--solid-diamond)
+:is(
+  .crosshair--fine-diamond,
+  .crosshair--inward-diamond,
+  .crosshair--solid-diamond
+)
   .crosshair__flag--bottom {
   clip-path: polygon(50% 0, 100% 18%, 100% 100%, 0 100%, 0 18%);
 }

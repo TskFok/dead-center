@@ -157,6 +157,40 @@ describe("Crosshair", () => {
     },
   );
 
+  it("fine-diamond 从容器边缘向中心延伸", () => {
+    expect(readFlagGeometry("fine-diamond").insetPercent).toBe(0);
+
+    const inwardFineDiamondRules = [
+      [
+        "left",
+        "polygon(0 0, 82% 0, 100% 50%, 82% 100%, 0 100%)",
+      ],
+      [
+        "right",
+        "polygon(18% 0, 100% 0, 100% 100%, 18% 100%, 0 50%)",
+      ],
+      [
+        "top",
+        "polygon(0 0, 100% 0, 100% 82%, 50% 100%, 0 82%)",
+      ],
+      [
+        "bottom",
+        "polygon(50% 0, 100% 18%, 100% 100%, 0 100%, 0 18%)",
+      ],
+    ] as const;
+
+    for (const [direction, clipPath] of inwardFineDiamondRules) {
+      const matchingRule = [...crosshairCss.matchAll(/([^{}]+)\{([^{}]+)\}/g)]
+        .find(
+          ([, selector, declarations]) =>
+            selector.includes(".crosshair--fine-diamond") &&
+            selector.includes(`.crosshair__flag--${direction}`) &&
+            declarations.includes(`clip-path: ${clipPath}`),
+        );
+      expect(matchingRule, `${direction} 旗臂应以尖头朝向中心`).toBeDefined();
+    }
+  });
+
   it.each(["dot-ring", "classic-cross", "soft-target"] as const)(
     "%s 保留原有圆形中心点",
     (preset) => {
