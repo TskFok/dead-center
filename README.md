@@ -49,6 +49,14 @@ pnpm tauri dev
 pnpm tauri build
 ```
 
+清理本地依赖和 Tauri 构建缓存：
+
+```bash
+pnpm clean
+```
+
+该命令只会删除 `node_modules` 与 `src-tauri/target`。如需恢复 JavaScript 依赖，请随后运行 `pnpm install`。
+
 ## 自动发布
 
 发布命令要求工作区干净、当前分支已与 `origin` 完全同步，并且 Git 凭据具有分支和 Tag 推送权限。命令会先运行前端测试、前端构建和 Rust 测试。
